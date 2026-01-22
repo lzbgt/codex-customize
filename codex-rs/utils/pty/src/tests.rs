@@ -227,6 +227,20 @@ async fn pipe_and_pty_share_interface() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn pty_reports_nonzero_exit_code() -> anyhow::Result<()> {
+    if cfg!(windows) {
+        return Ok(());
+    }
+
+    let env_map: HashMap<String, String> = std::env::vars().collect();
+    let (program, args) = shell_command("exit 7");
+    let spawned = spawn_pty_process(&program, &args, Path::new("."), &env_map, &None).await?;
+    let exit_code = spawned.exit_rx.await.unwrap_or(-1);
+    assert_eq!(exit_code, 7);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn pipe_drains_stderr_without_stdout_activity() -> anyhow::Result<()> {
     let Some(python) = find_python() else {
         eprintln!("python not found; skipping pipe_drains_stderr_without_stdout_activity");

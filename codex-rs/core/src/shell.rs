@@ -141,15 +141,15 @@ fn get_shell_path(
         return Some(default_shell_path);
     }
 
-    if let Ok(path) = which::which(binary_name) {
-        return Some(path);
-    }
-
     for path in fallback_paths {
         //check exists
         if let Some(path) = file_exists(&PathBuf::from(path)) {
             return Some(path);
         }
+    }
+
+    if let Ok(path) = which::which(binary_name) {
+        return Some(path);
     }
 
     None

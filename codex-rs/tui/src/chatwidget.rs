@@ -258,13 +258,6 @@ fn is_unified_exec_source(source: ExecCommandSource) -> bool {
     )
 }
 
-fn is_standard_tool_call(parsed_cmd: &[ParsedCommand]) -> bool {
-    !parsed_cmd.is_empty()
-        && parsed_cmd
-            .iter()
-            .all(|parsed| !matches!(parsed, ParsedCommand::Unknown { .. }))
-}
-
 const RATE_LIMIT_WARNING_THRESHOLDS: [f64; 3] = [75.0, 90.0, 95.0];
 const NUDGE_MODEL_SLUG: &str = "gpt-5.1-codex-mini";
 const RATE_LIMIT_SWITCH_PROMPT_THRESHOLD: f64 = 90.0;
@@ -1197,6 +1190,12 @@ impl ChatWidget {
         // Finalize, log a gentle prompt, and clear running state.
         self.finalize_turn();
 
+        // If MCP startup was in progress, treat the interrupt as a restart.
+        // Otherwise the UI can stay in a "running" state indefinitely, which prevents
+        // future user prompts from being submitted (they get queued behind startup).
+        self.mcp_startup_status = None;
+        self.update_task_running_state();
+
         if reason != TurnAbortReason::ReviewEnded {
             self.add_to_history(history_cell::new_error_event(
                 "Conversation interrupted - tell the model what to do differently. Something went wrong? Hit `/feedback` to report the issue.".to_owned(),
@@ -1316,9 +1315,6 @@ impl ChatWidget {
         self.flush_answer_stream_with_separator();
         if is_unified_exec_source(ev.source) {
             self.track_unified_exec_process_begin(&ev);
-            if !is_standard_tool_call(&ev.parsed_cmd) {
-                return;
-            }
         }
         let ev2 = ev.clone();
         self.defer_or_handle(|q| q.push_exec_begin(ev), |s| s.handle_exec_begin_now(ev2));
@@ -2745,15 +2741,24 @@ impl ChatWidget {
     }
 
     fn queue_user_message(&mut self, user_message: UserMessage) {
-        if !self.is_session_configured()
-            || self.bottom_pane.is_task_running()
-            || self.is_review_mode
-        {
+        // Only block submissions while an agent turn is active.
+        //
+        // MCP startup is intentionally treated as a background lifecycle: it can overlap with
+        // interactive use and should not make the UI feel "stuck" (especially after interrupts).
+        if !self.is_session_configured() || self.agent_turn_running || self.is_review_mode {
             self.queued_user_messages.push_back(user_message);
             self.refresh_queued_user_messages();
         } else {
             self.submit_user_message(user_message);
         }
+    }
+
+    pub(crate) fn enqueue_auto_continue_prompt(&mut self, prompt: String) {
+        // Auto-continue is intended to behave like a queued user prompt that
+        // should run after the current turn ends (and after any user-queued
+        // messages typed during the turn). Therefore we always append.
+        self.queued_user_messages.push_back(prompt.into());
+        self.refresh_queued_user_messages();
     }
 
     fn submit_user_message(&mut self, user_message: UserMessage) {
@@ -3145,7 +3150,8 @@ impl ChatWidget {
 
     // If idle and there are queued inputs, submit exactly one to start the next turn.
     fn maybe_send_next_queued_input(&mut self) {
-        if self.bottom_pane.is_task_running() {
+        // Only block while an agent turn is active; MCP startup can overlap with interaction.
+        if self.agent_turn_running {
             return;
         }
         if let Some(user_message) = self.queued_user_messages.pop_front() {
@@ -4785,6 +4791,18 @@ impl ChatWidget {
                     self.arm_quit_shortcut(key);
                 }
             }
+            return;
+        }
+
+        // If we are fully idle (no running work, no modal/popup, empty composer), treat Ctrl+C
+        // as an immediate quit. This matches typical terminal expectations and avoids cases where
+        // the user presses Ctrl+C expecting to exit but the shortcut window expires.
+        if DOUBLE_PRESS_QUIT_SHORTCUT_ENABLED
+            && !self.is_cancellable_work_active()
+            && self.bottom_pane.no_modal_or_popup_active()
+            && self.bottom_pane.composer_is_empty()
+        {
+            self.request_quit_without_confirmation();
             return;
         }
 

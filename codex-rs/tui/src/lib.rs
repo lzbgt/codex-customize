@@ -241,7 +241,10 @@ pub async fn run_main(
         model_provider: model_provider_override.clone(),
         config_profile: cli.config_profile.clone(),
         codex_linux_sandbox_exe,
-        show_raw_agent_reasoning: cli.oss.then_some(true),
+        developer_instructions: cli
+            .auto_continue
+            .then_some(codex_core::auto_continue::AUTO_CONTINUE_DEVELOPER_INSTRUCTIONS.to_string()),
+        show_raw_agent_reasoning: Some(true),
         additional_writable_roots: additional_dirs,
         ..Default::default()
     };
@@ -604,6 +607,9 @@ async fn run_ratatui_app(
     let active_profile = config.active_profile.clone();
     let should_show_trust_screen = should_show_trust_screen(&config);
 
+    let auto_continue = cli.auto_continue;
+    let auto_continue_max_turns = cli.auto_continue_max_turns;
+
     let Cli {
         prompt,
         images,
@@ -625,6 +631,8 @@ async fn run_ratatui_app(
         feedback,
         should_show_trust_screen, // Proxy to: is it a first run in this directory?
         ollama_chat_support_notice,
+        auto_continue,
+        auto_continue_max_turns,
     )
     .await;
 

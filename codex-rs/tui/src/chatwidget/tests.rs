@@ -1627,8 +1627,8 @@ fn get_available_model(chat: &ChatWidget, model: &str) -> ModelPreset {
 async fn empty_enter_during_task_does_not_queue() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(None).await;
 
-    // Simulate running task so submissions would normally be queued.
-    chat.bottom_pane.set_task_running(true);
+    // Simulate an active agent turn so submissions would normally be queued.
+    chat.on_task_started();
 
     // Press Enter with an empty composer.
     chat.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
@@ -1641,8 +1641,8 @@ async fn empty_enter_during_task_does_not_queue() {
 async fn alt_up_edits_most_recent_queued_message() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(None).await;
 
-    // Simulate a running task so messages would normally be queued.
-    chat.bottom_pane.set_task_running(true);
+    // Simulate an active agent turn so messages would normally be queued.
+    chat.on_task_started();
 
     // Seed two queued messages.
     chat.queued_user_messages
@@ -1681,7 +1681,7 @@ async fn enqueueing_history_prompt_multiple_times_is_stable() {
     chat.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
     // Simulate an active task so further submissions are queued.
-    chat.bottom_pane.set_task_running(true);
+    chat.on_task_started();
 
     for _ in 0..3 {
         // Recall the prompt from history and ensure it is what we expect.
@@ -3223,7 +3223,7 @@ async fn user_shell_command_renders_output_not_exploring() {
 async fn disabled_slash_command_while_task_running_snapshot() {
     // Build a chat widget and simulate an active task
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(None).await;
-    chat.bottom_pane.set_task_running(true);
+    chat.on_task_started();
 
     // Dispatch a command that is unavailable while a task runs (e.g., /model)
     chat.dispatch_command(SlashCommand::Model);
@@ -3535,7 +3535,7 @@ async fn interrupt_restores_queued_messages_into_composer() {
     let (mut chat, mut rx, mut op_rx) = make_chatwidget_manual(None).await;
 
     // Simulate a running task to enable queuing of user inputs.
-    chat.bottom_pane.set_task_running(true);
+    chat.on_task_started();
 
     // Queue two user messages while the task is running.
     chat.queued_user_messages
@@ -3573,7 +3573,7 @@ async fn interrupt_restores_queued_messages_into_composer() {
 async fn interrupt_prepends_queued_messages_before_existing_composer_text() {
     let (mut chat, mut rx, mut op_rx) = make_chatwidget_manual(None).await;
 
-    chat.bottom_pane.set_task_running(true);
+    chat.on_task_started();
     chat.bottom_pane
         .set_composer_text("current draft".to_string(), Vec::new(), Vec::new());
 
@@ -4341,7 +4341,7 @@ async fn plan_update_renders_history_cell() {
 #[tokio::test]
 async fn stream_error_updates_status_indicator() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(None).await;
-    chat.bottom_pane.set_task_running(true);
+    chat.on_task_started();
     let msg = "Reconnecting... 2/5";
     let details = "Idle timeout waiting for SSE";
     chat.handle_codex_event(Event {

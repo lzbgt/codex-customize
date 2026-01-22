@@ -102,6 +102,16 @@ pub struct Cli {
     #[arg(long = "add-dir", value_name = "DIR", value_hint = ValueHint::DirPath)]
     pub add_dir: Vec<PathBuf>,
 
+    /// After each completed turn, automatically continue with the next most urgent task(s)
+    /// without waiting for user input (unless the agent explicitly requests stop).
+    #[arg(long = "auto-continue", default_value_t = false)]
+    pub auto_continue: bool,
+
+    /// Optional safety override: maximum number of turns to run when `--auto-continue` is enabled
+    /// (including the initial turn).
+    #[arg(long = "auto-continue-max-turns", value_name = "N")]
+    pub auto_continue_max_turns: Option<usize>,
+
     /// Disable alternate screen mode
     ///
     /// Runs the TUI in inline mode, preserving terminal scrollback history. This is useful

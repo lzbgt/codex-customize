@@ -8,6 +8,7 @@
 pub mod api_bridge;
 mod apply_patch;
 pub mod auth;
+pub mod auto_continue;
 pub mod bash;
 mod client;
 mod client_common;

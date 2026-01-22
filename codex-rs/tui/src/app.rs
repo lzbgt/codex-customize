@@ -529,13 +529,14 @@ pub(crate) struct App {
     suppress_shutdown_complete: bool,
 
     windows_sandbox: WindowsSandboxState,
-
     thread_event_channels: HashMap<ThreadId, ThreadEventChannel>,
     active_thread_id: Option<ThreadId>,
     active_thread_rx: Option<mpsc::Receiver<Event>>,
     primary_thread_id: Option<ThreadId>,
     primary_session_configured: Option<SessionConfiguredEvent>,
     pending_primary_events: VecDeque<Event>,
+
+    auto_continue: AutoContinueState,
 }
 
 #[derive(Default)]
@@ -545,7 +546,109 @@ struct WindowsSandboxState {
     skip_world_writable_scan_once: bool,
 }
 
+#[derive(Debug, Default)]
+struct AutoContinueState {
+    enabled: bool,
+    max_turns: Option<usize>,
+    turns_queued: usize,
+    paused_until_next_turn: bool,
+    active_turn_id: Option<String>,
+    last_turn_end_event_id: Option<String>,
+}
+
+impl AutoContinueState {
+    fn new(enabled: bool, max_turns: Option<usize>) -> Self {
+        Self {
+            enabled,
+            max_turns,
+            turns_queued: 0,
+            paused_until_next_turn: false,
+            active_turn_id: None,
+            last_turn_end_event_id: None,
+        }
+    }
+
+    fn on_turn_started(&mut self, event_id: &str) {
+        // `AUTO_MODE_NEXT=stop` is temporary: as soon as a new turn begins (typically
+        // from a manual user prompt), resume normal auto-continue behavior.
+        self.paused_until_next_turn = false;
+        self.active_turn_id = Some(event_id.to_string());
+
+        // Defensive: allow a future turn-end event with the same id to still enqueue
+        // if the protocol ever reuses ids across streams.
+        if self.last_turn_end_event_id.as_deref() == Some(event_id) {
+            self.last_turn_end_event_id = None;
+        }
+    }
+
+    fn should_enqueue_for_turn_end(
+        &mut self,
+        event_id: &str,
+        next: Option<codex_core::auto_continue::AutoModeNext>,
+        turn_abort_reason: Option<codex_core::protocol::TurnAbortReason>,
+    ) -> bool {
+        if !self.enabled {
+            return false;
+        }
+
+        // Avoid injecting follow-ups for non-turn errors/background events.
+        if self.active_turn_id.as_deref() != Some(event_id) {
+            return false;
+        }
+
+        if self.last_turn_end_event_id.as_deref() == Some(event_id) {
+            return false;
+        }
+        self.last_turn_end_event_id = Some(event_id.to_string());
+        self.active_turn_id = None;
+
+        if self.paused_until_next_turn {
+            return false;
+        }
+
+        // User interrupt should behave like a fresh restart: do not auto-continue
+        // immediately after an interrupt, but resume after the next turn begins.
+        if matches!(
+            turn_abort_reason,
+            Some(codex_core::protocol::TurnAbortReason::Interrupted)
+                | Some(codex_core::protocol::TurnAbortReason::ReviewEnded)
+                | Some(codex_core::protocol::TurnAbortReason::Replaced)
+        ) {
+            self.paused_until_next_turn = true;
+            return false;
+        }
+
+        if matches!(next, Some(codex_core::auto_continue::AutoModeNext::Stop)) {
+            self.paused_until_next_turn = true;
+            return false;
+        }
+
+        if self
+            .max_turns
+            .is_some_and(|max_turns| self.turns_queued >= max_turns)
+        {
+            self.paused_until_next_turn = true;
+            return false;
+        }
+
+        self.turns_queued += 1;
+        true
+    }
+}
+
 impl App {
+    fn normalize_startup_error_message(message: &str) -> String {
+        // Historically, the CLI surfaced startup failures as an initialization error that
+        // referenced the `rules/` directory. Some internal error strings mention execpolicy,
+        // but the user-visible artifact is still the rules directory under CODEX_HOME.
+        message
+            .replace(
+                "failed to read execpolicy files",
+                "failed to read rules files",
+            )
+            .replace("failed to load execpolicy", "failed to load rules")
+    }
+
     pub fn chatwidget_init_for_forked_or_resumed_thread(
         &self,
         tui: &mut tui::Tui,
@@ -831,6 +934,8 @@ impl App {
         feedback: codex_feedback::CodexFeedback,
         is_first_run: bool,
         ollama_chat_support_notice: Option<DeprecationNoticeEvent>,
+        auto_continue: bool,
+        auto_continue_max_turns: Option<usize>,
     ) -> Result<AppExitInfo> {
         use tokio_stream::StreamExt;
         let (app_event_tx, mut app_event_rx) = unbounded_channel();
@@ -998,6 +1103,7 @@ impl App {
             primary_thread_id: None,
             primary_session_configured: None,
             pending_primary_events: VecDeque::new(),
+            auto_continue: AutoContinueState::new(auto_continue, auto_continue_max_turns),
         };
 
         // On startup, if Agent mode (workspace-write) or ReadOnly is active, warn about world-writable dirs on Windows.
@@ -1354,6 +1460,18 @@ impl App {
                 self.chat_widget.on_commit_tick();
             }
             AppEvent::CodexEvent(event) => {
+                // If we receive an error before the session is configured, treat it as a startup
+                // failure and exit fatally so the top-level CLI returns a non-zero exit status.
+                // This keeps behavior aligned with `tui/tests/suite/no_panic_on_startup.rs`.
+                if let EventMsg::Error(codex_core::protocol::ErrorEvent { message, .. }) =
+                    &event.msg
+                    && self.chat_widget.thread_id().is_none()
+                {
+                    let normalized = Self::normalize_startup_error_message(message);
+                    return Ok(AppRunControl::Exit(ExitReason::Fatal(format!(
+                        "Failed to initialize codex: {normalized}"
+                    ))));
+                }
                 self.enqueue_primary_event(event).await?;
             }
             AppEvent::Exit(mode) => match mode {
@@ -1933,6 +2051,51 @@ impl App {
             self.suppress_shutdown_complete = false;
             return;
         }
+        // Auto-continue must enqueue the follow-up prompt *before* the chat widget processes
+        // turn-end events, since `ChatWidget` will immediately submit one queued prompt on
+        // completion/errors.
+        match &event.msg {
+            EventMsg::TurnStarted(_) => {
+                self.auto_continue.on_turn_started(&event.id);
+            }
+            EventMsg::TurnComplete(codex_core::protocol::TurnCompleteEvent {
+                last_agent_message,
+            }) => {
+                let next = last_agent_message
+                    .as_deref()
+                    .and_then(codex_core::auto_continue::parse_auto_mode_next);
+                if self
+                    .auto_continue
+                    .should_enqueue_for_turn_end(&event.id, next, None)
+                {
+                    self.chat_widget.enqueue_auto_continue_prompt(
+                        codex_core::auto_continue::AUTO_CONTINUE_FOLLOWUP_PROMPT.to_string(),
+                    );
+                }
+            }
+            EventMsg::Error(_) => {
+                if self
+                    .auto_continue
+                    .should_enqueue_for_turn_end(&event.id, None, None)
+                {
+                    self.chat_widget.enqueue_auto_continue_prompt(
+                        codex_core::auto_continue::AUTO_CONTINUE_FOLLOWUP_PROMPT.to_string(),
+                    );
+                }
+            }
+            EventMsg::TurnAborted(ev) => {
+                if self.auto_continue.should_enqueue_for_turn_end(
+                    &event.id,
+                    None,
+                    Some(ev.reason.clone()),
+                ) {
+                    self.chat_widget.enqueue_auto_continue_prompt(
+                        codex_core::auto_continue::AUTO_CONTINUE_FOLLOWUP_PROMPT.to_string(),
+                    );
+                }
+            }
+            _ => {}
+        }
         if let EventMsg::ListSkillsResponse(response) = &event.msg {
             let cwd = self.chat_widget.config_ref().cwd.clone();
             let errors = errors_for_cwd(&cwd, response);
@@ -2294,6 +2457,7 @@ mod tests {
             primary_thread_id: None,
             primary_session_configured: None,
             pending_primary_events: VecDeque::new(),
+            auto_continue: AutoContinueState::default(),
         }
     }
 
@@ -2342,6 +2506,7 @@ mod tests {
                 primary_thread_id: None,
                 primary_session_configured: None,
                 pending_primary_events: VecDeque::new(),
+                auto_continue: AutoContinueState::default(),
             },
             rx,
             op_rx,
@@ -2717,5 +2882,53 @@ mod tests {
             summary.resume_command,
             Some("codex resume 123e4567-e89b-12d3-a456-426614174000".to_string())
         );
+    }
+
+    #[test]
+    fn auto_continue_enqueues_once_per_turn_end() {
+        let mut state = AutoContinueState::new(true, None);
+        state.on_turn_started("turn-1");
+        assert!(state.should_enqueue_for_turn_end("turn-1", None, None));
+        assert!(!state.should_enqueue_for_turn_end("turn-1", None, None));
+
+        state.on_turn_started("turn-2");
+        assert!(state.should_enqueue_for_turn_end("turn-2", None, None));
+    }
+
+    #[test]
+    fn auto_continue_stop_is_temporary() {
+        let mut state = AutoContinueState::new(true, None);
+        state.on_turn_started("turn-1");
+        assert!(!state.should_enqueue_for_turn_end(
+            "turn-1",
+            Some(codex_core::auto_continue::AutoModeNext::Stop),
+            None
+        ));
+
+        state.on_turn_started("turn-2");
+        assert!(state.should_enqueue_for_turn_end("turn-2", None, None));
+    }
+
+    #[test]
+    fn auto_continue_ignores_non_active_turn_end_events() {
+        let mut state = AutoContinueState::new(true, None);
+        state.on_turn_started("turn-1");
+
+        assert!(!state.should_enqueue_for_turn_end("other-turn", None, None));
+        assert!(state.should_enqueue_for_turn_end("turn-1", None, None));
+    }
+
+    #[test]
+    fn auto_continue_interrupt_pauses_until_next_turn() {
+        let mut state = AutoContinueState::new(true, None);
+        state.on_turn_started("turn-1");
+        assert!(!state.should_enqueue_for_turn_end(
+            "turn-1",
+            None,
+            Some(codex_core::protocol::TurnAbortReason::Interrupted)
+        ));
+
+        state.on_turn_started("turn-2");
+        assert!(state.should_enqueue_for_turn_end("turn-2", None, None));
     }
 }
