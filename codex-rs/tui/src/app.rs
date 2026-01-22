@@ -581,18 +581,12 @@ impl AutoContinueState {
         }
     }
 
-    fn should_enqueue_for_turn_end(
+    fn should_enqueue_for_turn_complete(
         &mut self,
         event_id: &str,
         next: Option<codex_core::auto_continue::AutoModeNext>,
-        turn_abort_reason: Option<codex_core::protocol::TurnAbortReason>,
     ) -> bool {
         if !self.enabled {
-            return false;
-        }
-
-        // Avoid injecting follow-ups for non-turn errors/background events.
-        if self.active_turn_id.as_deref() != Some(event_id) {
             return false;
         }
 
@@ -600,24 +594,18 @@ impl AutoContinueState {
             return false;
         }
         self.last_turn_end_event_id = Some(event_id.to_string());
-        self.active_turn_id = None;
+
+        // When a turn completes, always clear the active turn marker, even if
+        // we missed (or filtered) the corresponding TurnStarted event.
+        if self.active_turn_id.as_deref() == Some(event_id) {
+            self.active_turn_id = None;
+        }
 
         if self.paused_until_next_turn {
             return false;
         }
 
-        // User interrupt should behave like a fresh restart: do not auto-continue
-        // immediately after an interrupt, but resume after the next turn begins.
-        if matches!(
-            turn_abort_reason,
-            Some(codex_core::protocol::TurnAbortReason::Interrupted)
-                | Some(codex_core::protocol::TurnAbortReason::ReviewEnded)
-                | Some(codex_core::protocol::TurnAbortReason::Replaced)
-        ) {
-            self.paused_until_next_turn = true;
-            return false;
-        }
-
+        // An explicit stop request disables auto-continue until the next turn begins.
         if matches!(next, Some(codex_core::auto_continue::AutoModeNext::Stop)) {
             self.paused_until_next_turn = true;
             return false;
@@ -633,6 +621,73 @@ impl AutoContinueState {
 
         self.turns_queued += 1;
         true
+    }
+
+    fn should_enqueue_for_turn_aborted(
+        &mut self,
+        event_id: &str,
+        turn_abort_reason: codex_core::protocol::TurnAbortReason,
+    ) -> bool {
+        if !self.enabled {
+            return false;
+        }
+
+        if self.last_turn_end_event_id.as_deref() == Some(event_id) {
+            return false;
+        }
+        self.last_turn_end_event_id = Some(event_id.to_string());
+
+        if self.active_turn_id.as_deref() == Some(event_id) {
+            self.active_turn_id = None;
+        }
+
+        if self.paused_until_next_turn {
+            return false;
+        }
+
+        // User interrupt should behave like a fresh restart: do not auto-continue
+        // immediately after an interrupt, but resume after the next turn begins.
+        if matches!(
+            turn_abort_reason,
+            codex_core::protocol::TurnAbortReason::Interrupted
+                | codex_core::protocol::TurnAbortReason::ReviewEnded
+                | codex_core::protocol::TurnAbortReason::Replaced
+        ) {
+            self.paused_until_next_turn = true;
+            return false;
+        }
+
+        if self
+            .max_turns
+            .is_some_and(|max_turns| self.turns_queued >= max_turns)
+        {
+            self.paused_until_next_turn = true;
+            return false;
+        }
+
+        self.turns_queued += 1;
+        true
+    }
+
+    fn should_enqueue_for_turn_end(
+        &mut self,
+        event_id: &str,
+        next: Option<codex_core::auto_continue::AutoModeNext>,
+        _turn_abort_reason: Option<codex_core::protocol::TurnAbortReason>,
+    ) -> bool {
+        if !self.enabled {
+            return false;
+        }
+
+        // `EventMsg::Error` can be emitted during startup or other background phases.
+        // Only treat it as a turn-ending event if we have an active turn with the same id.
+        if self.active_turn_id.as_deref() != Some(event_id) {
+            return false;
+        }
+
+        // Treat Error like "turn complete", but without a stop marker (since we don't
+        // have the agent's final message content).
+        self.should_enqueue_for_turn_complete(event_id, next)
     }
 }
 
@@ -2066,7 +2121,7 @@ impl App {
                     .and_then(codex_core::auto_continue::parse_auto_mode_next);
                 if self
                     .auto_continue
-                    .should_enqueue_for_turn_end(&event.id, next, None)
+                    .should_enqueue_for_turn_complete(&event.id, next)
                 {
                     self.chat_widget.enqueue_auto_continue_prompt(
                         codex_core::auto_continue::AUTO_CONTINUE_FOLLOWUP_PROMPT.to_string(),
@@ -2084,11 +2139,10 @@ impl App {
                 }
             }
             EventMsg::TurnAborted(ev) => {
-                if self.auto_continue.should_enqueue_for_turn_end(
-                    &event.id,
-                    None,
-                    Some(ev.reason.clone()),
-                ) {
+                if self
+                    .auto_continue
+                    .should_enqueue_for_turn_aborted(&event.id, ev.reason.clone())
+                {
                     self.chat_widget.enqueue_auto_continue_prompt(
                         codex_core::auto_continue::AUTO_CONTINUE_FOLLOWUP_PROMPT.to_string(),
                     );
@@ -2888,33 +2942,33 @@ mod tests {
     fn auto_continue_enqueues_once_per_turn_end() {
         let mut state = AutoContinueState::new(true, None);
         state.on_turn_started("turn-1");
-        assert!(state.should_enqueue_for_turn_end("turn-1", None, None));
-        assert!(!state.should_enqueue_for_turn_end("turn-1", None, None));
+        assert!(state.should_enqueue_for_turn_complete("turn-1", None));
+        assert!(!state.should_enqueue_for_turn_complete("turn-1", None));
 
         state.on_turn_started("turn-2");
-        assert!(state.should_enqueue_for_turn_end("turn-2", None, None));
+        assert!(state.should_enqueue_for_turn_complete("turn-2", None));
     }
 
     #[test]
     fn auto_continue_stop_is_temporary() {
         let mut state = AutoContinueState::new(true, None);
         state.on_turn_started("turn-1");
-        assert!(!state.should_enqueue_for_turn_end(
+        assert!(!state.should_enqueue_for_turn_complete(
             "turn-1",
             Some(codex_core::auto_continue::AutoModeNext::Stop),
-            None
         ));
 
         state.on_turn_started("turn-2");
-        assert!(state.should_enqueue_for_turn_end("turn-2", None, None));
+        assert!(state.should_enqueue_for_turn_complete("turn-2", None));
     }
 
     #[test]
-    fn auto_continue_ignores_non_active_turn_end_events() {
+    fn auto_continue_ignores_background_error_without_turn() {
         let mut state = AutoContinueState::new(true, None);
-        state.on_turn_started("turn-1");
+        // No TurnStarted observed.
+        assert!(!state.should_enqueue_for_turn_end("turn-1", None, None));
 
-        assert!(!state.should_enqueue_for_turn_end("other-turn", None, None));
+        state.on_turn_started("turn-1");
         assert!(state.should_enqueue_for_turn_end("turn-1", None, None));
     }
 
@@ -2922,13 +2976,19 @@ mod tests {
     fn auto_continue_interrupt_pauses_until_next_turn() {
         let mut state = AutoContinueState::new(true, None);
         state.on_turn_started("turn-1");
-        assert!(!state.should_enqueue_for_turn_end(
+        assert!(!state.should_enqueue_for_turn_aborted(
             "turn-1",
-            None,
-            Some(codex_core::protocol::TurnAbortReason::Interrupted)
+            codex_core::protocol::TurnAbortReason::Interrupted
         ));
 
         state.on_turn_started("turn-2");
-        assert!(state.should_enqueue_for_turn_end("turn-2", None, None));
+        assert!(state.should_enqueue_for_turn_complete("turn-2", None));
+    }
+
+    #[test]
+    fn auto_continue_enqueues_on_turn_complete_without_marker_or_turn_started() {
+        let mut state = AutoContinueState::new(true, None);
+        // No TurnStarted observed, but TurnComplete should still trigger auto-continue.
+        assert!(state.should_enqueue_for_turn_complete("turn-1", None));
     }
 }
