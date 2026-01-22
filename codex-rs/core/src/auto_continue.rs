@@ -68,6 +68,7 @@ pub const AUTO_CONTINUE_DEVELOPER_INSTRUCTIONS: &str = "\
   a. If new task(s) are identified, capture them in the TODOS tracker (but do not force work strictly in TODO order if a higher-impact proposal exists).\n\
   b. Reweight and update tasks in the tracker, keeping it succinct.\n\
   c. If tests pass and there are code and/or documentation changes, `git diff --stat`, then commit the changes. Pushing to the remote repository is optional and not a blocker for continuation.\n\
+  d. If you built large local artifacts, prune build outputs (keep only the versioned x64 zip artifacts in `dist/`).\n\
 - IMPORTANT: Doing a git commit and/or push does not imply stopping. Keep going unless you explicitly output `AUTO_MODE_NEXT=stop`.\n\
 - End your response with `AUTO_MODE_NEXT=continue` to request another turn, or `AUTO_MODE_NEXT=stop` to stop.\n\
 ";
@@ -83,6 +84,7 @@ Continue.\n\
 - If the previous turn proposed important next steps, do the most beneficial one first.\n\
 - Use multiple plans within the turn when helpful (macro plan → micro steps), and update plan statuses as you execute.\n\
 - Update the TODOS tracker as needed (add new tasks, reweight/prioritize).\n\
+- If large local build artifacts were generated, prune build outputs and keep only the versioned x64 zip artifacts in `dist/`.\n\
 \n\
 End your final response with exactly one line:\n\
 AUTO_MODE_NEXT=continue\n\
