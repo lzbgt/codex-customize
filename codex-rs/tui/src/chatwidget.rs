@@ -752,8 +752,13 @@ impl ChatWidget {
             force_reload: true,
         });
         if let Some(user_message) = self.initial_user_message.take() {
-            self.submit_user_message(user_message);
+            self.queued_user_messages.push_front(user_message);
+            self.refresh_queued_user_messages();
         }
+
+        // Flush any prompts that were queued while bootstrapping (including early user input
+        // submitted before SessionConfigured, or an initial CLI prompt).
+        self.maybe_send_next_queued_input();
         if !self.suppress_session_configured_redraw {
             self.request_redraw();
         }
@@ -4897,7 +4902,7 @@ impl ChatWidget {
 
     // Review mode counts as cancellable work so Ctrl+C interrupts instead of quitting.
     fn is_cancellable_work_active(&self) -> bool {
-        self.bottom_pane.is_task_running() || self.is_review_mode
+        self.agent_turn_running || self.is_review_mode
     }
 
     pub(crate) fn composer_is_empty(&self) -> bool {

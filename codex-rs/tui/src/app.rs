@@ -2938,6 +2938,62 @@ mod tests {
         );
     }
 
+    #[tokio::test]
+    async fn auto_continue_submits_followup_after_turn_complete_without_marker() {
+        let (mut app, mut _app_event_rx, mut op_rx) = make_test_app_with_channels().await;
+        app.auto_continue = AutoContinueState::new(true, None);
+
+        // Ensure the ChatWidget is configured so it can submit user turns.
+        let configured = SessionConfiguredEvent {
+            session_id: ThreadId::new(),
+            forked_from_id: None,
+            model: "gpt-test".to_string(),
+            model_provider_id: "test-provider".to_string(),
+            approval_policy: AskForApproval::Never,
+            sandbox_policy: SandboxPolicy::ReadOnly,
+            cwd: PathBuf::from("/home/user/project"),
+            reasoning_effort: None,
+            history_log_id: 0,
+            history_entry_count: 0,
+            initial_messages: None,
+            rollout_path: PathBuf::new(),
+        };
+        app.chat_widget.handle_codex_event(Event {
+            id: "session".to_string(),
+            msg: EventMsg::SessionConfigured(configured),
+        });
+        while op_rx.try_recv().is_ok() {}
+
+        app.handle_codex_event_now(Event {
+            id: "turn-1".to_string(),
+            msg: EventMsg::TurnStarted(codex_core::protocol::TurnStartedEvent {
+                model_context_window: None,
+            }),
+        });
+        app.handle_codex_event_now(Event {
+            id: "turn-1".to_string(),
+            msg: EventMsg::TurnComplete(codex_core::protocol::TurnCompleteEvent {
+                last_agent_message: Some("ok".to_string()),
+            }),
+        });
+
+        let mut next_user_turn = None;
+        while let Ok(op) = op_rx.try_recv() {
+            if let Op::UserTurn { items, .. } = op {
+                next_user_turn = Some(items);
+                break;
+            }
+        }
+        let items = next_user_turn.expect("expected follow-up Op::UserTurn");
+        assert_eq!(
+            items,
+            vec![codex_protocol::user_input::UserInput::Text {
+                text: codex_core::auto_continue::AUTO_CONTINUE_FOLLOWUP_PROMPT.to_string(),
+                text_elements: Vec::new(),
+            }]
+        );
+    }
+
     #[test]
     fn auto_continue_enqueues_once_per_turn_end() {
         let mut state = AutoContinueState::new(true, None);
