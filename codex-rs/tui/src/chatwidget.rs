@@ -1686,6 +1686,7 @@ impl ChatWidget {
                 source,
                 ev.interaction_input.clone(),
                 self.config.animations,
+                self.config.show_full_tool_output,
             )));
         }
 
@@ -1726,7 +1727,10 @@ impl ChatWidget {
         // If the patch was successful, just let the "Edited" block stand.
         // Otherwise, add a failure block.
         if !event.success {
-            self.add_to_history(history_cell::new_patch_apply_failure(event.stderr));
+            self.add_to_history(history_cell::new_patch_apply_failure(
+                event.stderr,
+                self.config.show_full_tool_output,
+            ));
         }
         // Mark that actual work was done (patch applied)
         self.had_work_activity = true;
@@ -1850,6 +1854,7 @@ impl ChatWidget {
                 ev.source,
                 interaction_input,
                 self.config.animations,
+                self.config.show_full_tool_output,
             )));
             self.bump_active_cell_revision();
         }
@@ -1864,6 +1869,7 @@ impl ChatWidget {
             ev.call_id,
             ev.invocation,
             self.config.animations,
+            self.config.show_full_tool_output,
         )));
         self.bump_active_cell_revision();
         self.request_redraw();
@@ -1890,6 +1896,7 @@ impl ChatWidget {
                     call_id,
                     invocation,
                     self.config.animations,
+                    self.config.show_full_tool_output,
                 );
                 let extra_cell = cell.complete(duration, result);
                 self.active_cell = Some(Box::new(cell));
@@ -2759,6 +2766,10 @@ impl ChatWidget {
         // messages typed during the turn). Therefore we always append.
         self.queued_user_messages.push_back(prompt.into());
         self.refresh_queued_user_messages();
+
+        // If the UI thinks we're already idle (e.g., missing TurnStarted/TurnComplete events,
+        // or a restart boundary), kick the queue so the follow-up prompt actually runs.
+        self.maybe_send_next_queued_input();
     }
 
     fn submit_user_message(&mut self, user_message: UserMessage) {
@@ -3150,8 +3161,11 @@ impl ChatWidget {
 
     // If idle and there are queued inputs, submit exactly one to start the next turn.
     fn maybe_send_next_queued_input(&mut self) {
-        // Only block while an agent turn is active; MCP startup can overlap with interaction.
-        if self.agent_turn_running {
+        // Only submit queued inputs when the session is interactive and idle.
+        //
+        // - Block while an agent turn is active; MCP startup can overlap with interaction.
+        // - Block while review mode is active; review uses its own submission flow.
+        if self.agent_turn_running || self.is_review_mode {
             return;
         }
         if let Some(user_message) = self.queued_user_messages.pop_front() {

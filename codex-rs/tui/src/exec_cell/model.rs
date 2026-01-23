@@ -10,6 +10,7 @@ pub(crate) struct CommandOutput {
     /// The aggregated stderr + stdout interleaved.
     pub(crate) aggregated_output: String,
     /// The formatted output of the command, as seen by the model.
+    #[allow(dead_code)]
     pub(crate) formatted_output: String,
 }
 
@@ -29,13 +30,19 @@ pub(crate) struct ExecCall {
 pub(crate) struct ExecCell {
     pub(crate) calls: Vec<ExecCall>,
     animations_enabled: bool,
+    show_full_tool_output: bool,
 }
 
 impl ExecCell {
-    pub(crate) fn new(call: ExecCall, animations_enabled: bool) -> Self {
+    pub(crate) fn new(
+        call: ExecCall,
+        animations_enabled: bool,
+        show_full_tool_output: bool,
+    ) -> Self {
         Self {
             calls: vec![call],
             animations_enabled,
+            show_full_tool_output,
         }
     }
 
@@ -61,6 +68,7 @@ impl ExecCell {
             Some(Self {
                 calls: [self.calls.clone(), vec![call]].concat(),
                 animations_enabled: self.animations_enabled,
+                show_full_tool_output: self.show_full_tool_output,
             })
         } else {
             None
@@ -119,6 +127,10 @@ impl ExecCell {
 
     pub(crate) fn animations_enabled(&self) -> bool {
         self.animations_enabled
+    }
+
+    pub(crate) fn show_full_tool_output(&self) -> bool {
+        self.show_full_tool_output
     }
 
     pub(crate) fn iter_calls(&self) -> impl Iterator<Item = &ExecCall> {

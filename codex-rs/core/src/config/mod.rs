@@ -200,6 +200,9 @@ pub struct Config {
     /// Show startup tooltips in the TUI welcome screen.
     pub show_tooltips: bool,
 
+    /// Show full tool output (no truncation) in the transcript UI.
+    pub show_full_tool_output: bool,
+
     /// Start the TUI in the specified collaboration mode (plan/execute/etc.).
     pub experimental_mode: Option<ModeKind>,
 
@@ -1581,6 +1584,11 @@ impl Config {
                 .unwrap_or_default(),
             animations: cfg.tui.as_ref().map(|t| t.animations).unwrap_or(true),
             show_tooltips: cfg.tui.as_ref().map(|t| t.show_tooltips).unwrap_or(true),
+            show_full_tool_output: cfg
+                .tui
+                .as_ref()
+                .map(|t| t.show_full_tool_output)
+                .unwrap_or(true),
             experimental_mode: cfg.tui.as_ref().and_then(|t| t.experimental_mode),
             tui_alternate_screen: cfg
                 .tui

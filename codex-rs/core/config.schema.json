@@ -985,6 +985,11 @@
           "default": true,
           "description": "Enable desktop notifications from the TUI when the terminal is unfocused. Defaults to `true`."
         },
+        "show_full_tool_output": {
+          "default": true,
+          "description": "Show full tool output (no truncation) in the transcript UI.\n\nWhen `true` (default), tool outputs (shell/exec, MCP tool results, patch failures, etc.) are rendered without inserting ellipsis lines like `… +N lines`.\n\nThis can produce very large transcript entries for commands that print a lot of output.",
+          "type": "boolean"
+        },
         "show_tooltips": {
           "default": true,
           "description": "Show startup tooltips in the TUI welcome screen. Defaults to `true`.",

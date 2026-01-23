@@ -42,6 +42,7 @@ pub(crate) fn new_active_exec_command(
     source: ExecCommandSource,
     interaction_input: Option<String>,
     animations_enabled: bool,
+    show_full_tool_output: bool,
 ) -> ExecCell {
     ExecCell::new(
         ExecCall {
@@ -55,6 +56,7 @@ pub(crate) fn new_active_exec_command(
             interaction_input,
         },
         animations_enabled,
+        show_full_tool_output,
     )
 }
 
@@ -226,7 +228,7 @@ impl HistoryCell for ExecCell {
                 if !call.is_unified_exec_interaction() {
                     let wrap_width = width.max(1) as usize;
                     let wrap_opts = RtOptions::new(wrap_width);
-                    for unwrapped in output.formatted_output.lines().map(ansi_escape_line) {
+                    for unwrapped in output.aggregated_output.lines().map(ansi_escape_line) {
                         let wrapped = word_wrap_line(&unwrapped, wrap_opts.clone());
                         push_owned_lines(&wrapped, &mut lines);
                     }
@@ -432,58 +434,102 @@ impl ExecCell {
         }
 
         if let Some(output) = call.output.as_ref() {
-            let line_limit = if call.is_user_shell_command() {
-                USER_SHELL_TOOL_CALL_MAX_LINES
-            } else {
-                TOOL_CALL_MAX_LINES
-            };
-            let raw_output = output_lines(
-                Some(output),
-                OutputLinesParams {
-                    line_limit,
-                    only_err: false,
-                    include_angle_pipe: false,
-                    include_prefix: false,
-                },
-            );
-            let display_limit = if call.is_user_shell_command() {
-                USER_SHELL_TOOL_CALL_MAX_LINES
-            } else {
-                layout.output_max_lines
-            };
+            if self.show_full_tool_output() {
+                let output_text = if call.is_unified_exec_interaction() {
+                    ""
+                } else {
+                    output.aggregated_output.as_str()
+                };
 
-            if raw_output.lines.is_empty() {
-                if !call.is_unified_exec_interaction() {
-                    lines.extend(prefix_lines(
-                        vec![Line::from("(no output)".dim())],
-                        Span::from(layout.output_block.initial_prefix).dim(),
-                        Span::from(layout.output_block.subsequent_prefix),
-                    ));
+                if output_text.is_empty() {
+                    if !call.is_unified_exec_interaction() {
+                        lines.extend(prefix_lines(
+                            vec![Line::from("(no output)".dim())],
+                            Span::from(layout.output_block.initial_prefix).dim(),
+                            Span::from(layout.output_block.subsequent_prefix),
+                        ));
+                    }
+                } else {
+                    let mut wrapped_output: Vec<Line<'static>> = Vec::new();
+                    let output_wrap_width = layout.output_block.wrap_width(width);
+                    let output_opts = RtOptions::new(output_wrap_width)
+                        .word_splitter(WordSplitter::NoHyphenation);
+                    for raw in output_text.lines() {
+                        let mut line = ansi_escape_line(raw);
+                        line.spans.iter_mut().for_each(|span| {
+                            span.style = span.style.add_modifier(Modifier::DIM);
+                        });
+                        push_owned_lines(
+                            &word_wrap_line(&line, output_opts.clone()),
+                            &mut wrapped_output,
+                        );
+                    }
+
+                    if !wrapped_output.is_empty() {
+                        lines.extend(prefix_lines(
+                            wrapped_output,
+                            Span::from(layout.output_block.initial_prefix).dim(),
+                            Span::from(layout.output_block.subsequent_prefix),
+                        ));
+                    }
                 }
             } else {
-                // Wrap first so that truncation is applied to on-screen lines
-                // rather than logical lines. This ensures that a small number
-                // of very long lines cannot flood the viewport.
-                let mut wrapped_output: Vec<Line<'static>> = Vec::new();
-                let output_wrap_width = layout.output_block.wrap_width(width);
-                let output_opts =
-                    RtOptions::new(output_wrap_width).word_splitter(WordSplitter::NoHyphenation);
-                for line in &raw_output.lines {
-                    push_owned_lines(
-                        &word_wrap_line(line, output_opts.clone()),
-                        &mut wrapped_output,
+                let line_limit = if call.is_user_shell_command() {
+                    USER_SHELL_TOOL_CALL_MAX_LINES
+                } else {
+                    TOOL_CALL_MAX_LINES
+                };
+                let raw_output = output_lines(
+                    Some(output),
+                    OutputLinesParams {
+                        line_limit,
+                        only_err: false,
+                        include_angle_pipe: false,
+                        include_prefix: false,
+                    },
+                );
+                let display_limit = if call.is_user_shell_command() {
+                    USER_SHELL_TOOL_CALL_MAX_LINES
+                } else {
+                    layout.output_max_lines
+                };
+
+                if raw_output.lines.is_empty() {
+                    if !call.is_unified_exec_interaction() {
+                        lines.extend(prefix_lines(
+                            vec![Line::from("(no output)".dim())],
+                            Span::from(layout.output_block.initial_prefix).dim(),
+                            Span::from(layout.output_block.subsequent_prefix),
+                        ));
+                    }
+                } else {
+                    // Wrap first so that truncation is applied to on-screen lines
+                    // rather than logical lines. This ensures that a small number
+                    // of very long lines cannot flood the viewport.
+                    let mut wrapped_output: Vec<Line<'static>> = Vec::new();
+                    let output_wrap_width = layout.output_block.wrap_width(width);
+                    let output_opts = RtOptions::new(output_wrap_width)
+                        .word_splitter(WordSplitter::NoHyphenation);
+                    for line in &raw_output.lines {
+                        push_owned_lines(
+                            &word_wrap_line(line, output_opts.clone()),
+                            &mut wrapped_output,
+                        );
+                    }
+
+                    let trimmed_output = Self::truncate_lines_middle(
+                        &wrapped_output,
+                        display_limit,
+                        raw_output.omitted,
                     );
-                }
 
-                let trimmed_output =
-                    Self::truncate_lines_middle(&wrapped_output, display_limit, raw_output.omitted);
-
-                if !trimmed_output.is_empty() {
-                    lines.extend(prefix_lines(
-                        trimmed_output,
-                        Span::from(layout.output_block.initial_prefix).dim(),
-                        Span::from(layout.output_block.subsequent_prefix),
-                    ));
+                    if !trimmed_output.is_empty() {
+                        lines.extend(prefix_lines(
+                            trimmed_output,
+                            Span::from(layout.output_block.initial_prefix).dim(),
+                            Span::from(layout.output_block.subsequent_prefix),
+                        ));
+                    }
                 }
             }
         }
@@ -681,7 +727,7 @@ mod tests {
             interaction_input: None,
         };
 
-        let cell = ExecCell::new(call, false);
+        let cell = ExecCell::new(call, false, false);
 
         // Use a narrow width so each logical line wraps into many on-screen lines.
         let lines = cell.command_display_lines(width);

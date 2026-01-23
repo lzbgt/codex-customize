@@ -1166,6 +1166,7 @@ pub(crate) struct McpToolCallCell {
     duration: Option<Duration>,
     result: Option<Result<mcp_types::CallToolResult, String>>,
     animations_enabled: bool,
+    show_full_tool_output: bool,
 }
 
 impl McpToolCallCell {
@@ -1173,6 +1174,7 @@ impl McpToolCallCell {
         call_id: String,
         invocation: McpInvocation,
         animations_enabled: bool,
+        show_full_tool_output: bool,
     ) -> Self {
         Self {
             call_id,
@@ -1181,6 +1183,7 @@ impl McpToolCallCell {
             duration: None,
             result: None,
             animations_enabled,
+            show_full_tool_output,
         }
     }
 
@@ -1214,10 +1217,14 @@ impl McpToolCallCell {
         self.result = Some(Err("interrupted".to_string()));
     }
 
-    fn render_content_block(block: &mcp_types::ContentBlock, width: usize) -> String {
+    fn render_content_block(&self, block: &mcp_types::ContentBlock, width: usize) -> String {
         match block {
             mcp_types::ContentBlock::TextContent(text) => {
-                format_and_truncate_tool_result(&text.text, TOOL_CALL_MAX_LINES, width)
+                if self.show_full_tool_output {
+                    text.text.clone()
+                } else {
+                    format_and_truncate_tool_result(&text.text, TOOL_CALL_MAX_LINES, width)
+                }
             }
             mcp_types::ContentBlock::ImageContent(_) => "<image content>".to_string(),
             mcp_types::ContentBlock::AudioContent(_) => "<audio content>".to_string(),
@@ -1282,7 +1289,7 @@ impl HistoryCell for McpToolCallCell {
                 Ok(mcp_types::CallToolResult { content, .. }) => {
                     if !content.is_empty() {
                         for block in content {
-                            let text = Self::render_content_block(block, detail_wrap_width);
+                            let text = self.render_content_block(block, detail_wrap_width);
                             for segment in text.split('\n') {
                                 let line = Line::from(segment.to_string().dim());
                                 let wrapped = word_wrap_line(
@@ -1297,11 +1304,15 @@ impl HistoryCell for McpToolCallCell {
                     }
                 }
                 Err(err) => {
-                    let err_text = format_and_truncate_tool_result(
-                        &format!("Error: {err}"),
-                        TOOL_CALL_MAX_LINES,
-                        width as usize,
-                    );
+                    let err_text = if self.show_full_tool_output {
+                        format!("Error: {err}")
+                    } else {
+                        format_and_truncate_tool_result(
+                            &format!("Error: {err}"),
+                            TOOL_CALL_MAX_LINES,
+                            width as usize,
+                        )
+                    };
                     let err_line = Line::from(err_text.dim());
                     let wrapped = word_wrap_line(
                         &err_line,
@@ -1338,8 +1349,14 @@ pub(crate) fn new_active_mcp_tool_call(
     call_id: String,
     invocation: McpInvocation,
     animations_enabled: bool,
+    show_full_tool_output: bool,
 ) -> McpToolCallCell {
-    McpToolCallCell::new(call_id, invocation, animations_enabled)
+    McpToolCallCell::new(
+        call_id,
+        invocation,
+        animations_enabled,
+        show_full_tool_output,
+    )
 }
 
 pub(crate) fn new_web_search_call(query: String) -> PrefixedWrappedHistoryCell {
@@ -1706,13 +1723,21 @@ pub(crate) fn new_patch_event(
     }
 }
 
-pub(crate) fn new_patch_apply_failure(stderr: String) -> PlainHistoryCell {
+pub(crate) fn new_patch_apply_failure(
+    stderr: String,
+    show_full_tool_output: bool,
+) -> PlainHistoryCell {
     let mut lines: Vec<Line<'static>> = Vec::new();
 
     // Failure title
     lines.push(Line::from("✘ Failed to apply patch".magenta().bold()));
 
     if !stderr.trim().is_empty() {
+        let line_limit = if show_full_tool_output {
+            stderr.lines().count().max(1)
+        } else {
+            TOOL_CALL_MAX_LINES
+        };
         let output = output_lines(
             Some(&CommandOutput {
                 exit_code: 1,
@@ -1720,7 +1745,7 @@ pub(crate) fn new_patch_apply_failure(stderr: String) -> PlainHistoryCell {
                 aggregated_output: stderr,
             }),
             OutputLinesParams {
-                line_limit: TOOL_CALL_MAX_LINES,
+                line_limit,
                 only_err: true,
                 include_angle_pipe: true,
                 include_prefix: true,
@@ -2111,7 +2136,7 @@ mod tests {
             })),
         };
 
-        let cell = new_active_mcp_tool_call("call-1".into(), invocation, true);
+        let cell = new_active_mcp_tool_call("call-1".into(), invocation, true, true);
         let rendered = render_lines(&cell.display_lines(80)).join("\n");
 
         insta::assert_snapshot!(rendered);
@@ -2138,7 +2163,7 @@ mod tests {
             structured_content: None,
         };
 
-        let mut cell = new_active_mcp_tool_call("call-2".into(), invocation, true);
+        let mut cell = new_active_mcp_tool_call("call-2".into(), invocation, true, true);
         assert!(
             cell.complete(Duration::from_millis(1420), Ok(result))
                 .is_none()
@@ -2160,7 +2185,7 @@ mod tests {
             })),
         };
 
-        let mut cell = new_active_mcp_tool_call("call-3".into(), invocation, true);
+        let mut cell = new_active_mcp_tool_call("call-3".into(), invocation, true, true);
         assert!(
             cell.complete(Duration::from_secs(2), Err("network timeout".into()))
                 .is_none()
@@ -2204,7 +2229,7 @@ mod tests {
             structured_content: None,
         };
 
-        let mut cell = new_active_mcp_tool_call("call-4".into(), invocation, true);
+        let mut cell = new_active_mcp_tool_call("call-4".into(), invocation, true, true);
         assert!(
             cell.complete(Duration::from_millis(640), Ok(result))
                 .is_none()
@@ -2236,7 +2261,7 @@ mod tests {
             structured_content: None,
         };
 
-        let mut cell = new_active_mcp_tool_call("call-5".into(), invocation, true);
+        let mut cell = new_active_mcp_tool_call("call-5".into(), invocation, true, true);
         assert!(
             cell.complete(Duration::from_millis(1280), Ok(result))
                 .is_none()
@@ -2275,7 +2300,7 @@ mod tests {
             structured_content: None,
         };
 
-        let mut cell = new_active_mcp_tool_call("call-6".into(), invocation, true);
+        let mut cell = new_active_mcp_tool_call("call-6".into(), invocation, true, true);
         assert!(
             cell.complete(Duration::from_millis(320), Ok(result))
                 .is_none()
@@ -2361,6 +2386,7 @@ mod tests {
                 interaction_input: None,
             },
             true,
+            true,
         );
         // Mark call complete so markers are ✓
         cell.complete_call(&call_id, CommandOutput::default(), Duration::from_millis(1));
@@ -2387,6 +2413,7 @@ mod tests {
                 duration: None,
                 interaction_input: None,
             },
+            true,
             true,
         );
         // Call 1: Search only
@@ -2457,6 +2484,7 @@ mod tests {
                 interaction_input: None,
             },
             true,
+            true,
         );
         cell.complete_call("c1", CommandOutput::default(), Duration::from_millis(1));
         let lines = cell.display_lines(80);
@@ -2480,6 +2508,7 @@ mod tests {
                 duration: None,
                 interaction_input: None,
             },
+            true,
             true,
         );
         // Mark call complete so it renders as "Ran"
@@ -2507,6 +2536,7 @@ mod tests {
                 interaction_input: None,
             },
             true,
+            true,
         );
         cell.complete_call(&call_id, CommandOutput::default(), Duration::from_millis(1));
         // Wide enough that it fits inline
@@ -2531,6 +2561,7 @@ mod tests {
                 interaction_input: None,
             },
             true,
+            true,
         );
         cell.complete_call(&call_id, CommandOutput::default(), Duration::from_millis(1));
         let lines = cell.display_lines(24);
@@ -2553,6 +2584,7 @@ mod tests {
                 duration: None,
                 interaction_input: None,
             },
+            true,
             true,
         );
         cell.complete_call(&call_id, CommandOutput::default(), Duration::from_millis(1));
@@ -2578,6 +2610,7 @@ mod tests {
                 interaction_input: None,
             },
             true,
+            true,
         );
         cell.complete_call(&call_id, CommandOutput::default(), Duration::from_millis(1));
         let lines = cell.display_lines(28);
@@ -2601,6 +2634,7 @@ mod tests {
                 duration: None,
                 interaction_input: None,
             },
+            true,
             true,
         );
         let stderr: String = (1..=10)
@@ -2651,6 +2685,7 @@ mod tests {
                 duration: None,
                 interaction_input: None,
             },
+            true,
             true,
         );
 

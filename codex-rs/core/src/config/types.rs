@@ -454,6 +454,15 @@ pub struct Tui {
     /// scrollback in terminal multiplexers like Zellij that follow the xterm spec.
     #[serde(default)]
     pub alternate_screen: AltScreenMode,
+
+    /// Show full tool output (no truncation) in the transcript UI.
+    ///
+    /// When `true` (default), tool outputs (shell/exec, MCP tool results, patch failures, etc.)
+    /// are rendered without inserting ellipsis lines like `… +N lines`.
+    ///
+    /// This can produce very large transcript entries for commands that print a lot of output.
+    #[serde(default = "default_true")]
+    pub show_full_tool_output: bool,
 }
 
 const fn default_true() -> bool {
