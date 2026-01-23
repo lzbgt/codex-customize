@@ -5122,6 +5122,10 @@ impl ChatWidget {
         self.bottom_pane.show_view(Box::new(view));
     }
 
+    pub(crate) fn is_agent_turn_running(&self) -> bool {
+        self.agent_turn_running
+    }
+
     pub(crate) fn token_usage(&self) -> TokenUsage {
         self.token_info
             .as_ref()

@@ -551,8 +551,8 @@ struct AutoContinueState {
     enabled: bool,
     max_turns: Option<usize>,
     turns_queued: usize,
+    max_turns_reached: bool,
     paused_until_next_turn: bool,
-    active_turn_id: Option<String>,
     last_turn_end_event_id: Option<String>,
 }
 
@@ -562,17 +562,24 @@ impl AutoContinueState {
             enabled,
             max_turns,
             turns_queued: 0,
+            max_turns_reached: false,
             paused_until_next_turn: false,
-            active_turn_id: None,
             last_turn_end_event_id: None,
         }
+    }
+
+    fn reset_for_new_session(&mut self) {
+        // Preserve `enabled` and `max_turns` (these come from CLI args).
+        self.turns_queued = 0;
+        self.max_turns_reached = false;
+        self.paused_until_next_turn = false;
+        self.last_turn_end_event_id = None;
     }
 
     fn on_turn_started(&mut self, event_id: &str) {
         // `AUTO_MODE_NEXT=stop` is temporary: as soon as a new turn begins (typically
         // from a manual user prompt), resume normal auto-continue behavior.
         self.paused_until_next_turn = false;
-        self.active_turn_id = Some(event_id.to_string());
 
         // Defensive: allow a future turn-end event with the same id to still enqueue
         // if the protocol ever reuses ids across streams.
@@ -590,19 +597,20 @@ impl AutoContinueState {
             return false;
         }
 
+        if self.max_turns_reached {
+            return false;
+        }
+
         if self.last_turn_end_event_id.as_deref() == Some(event_id) {
             return false;
         }
         self.last_turn_end_event_id = Some(event_id.to_string());
 
-        // When a turn completes, always clear the active turn marker, even if
-        // we missed (or filtered) the corresponding TurnStarted event.
-        if self.active_turn_id.as_deref() == Some(event_id) {
-            self.active_turn_id = None;
-        }
-
+        // If we missed the TurnStarted event (or it was filtered), treat a completed
+        // turn as a resumption point. This prevents a "temporary stop" (or interrupt)
+        // pause from becoming permanent when TurnStarted isn't observed.
         if self.paused_until_next_turn {
-            return false;
+            self.paused_until_next_turn = false;
         }
 
         // An explicit stop request disables auto-continue until the next turn begins.
@@ -615,6 +623,7 @@ impl AutoContinueState {
             .max_turns
             .is_some_and(|max_turns| self.turns_queued >= max_turns)
         {
+            self.max_turns_reached = true;
             self.paused_until_next_turn = true;
             return false;
         }
@@ -632,17 +641,19 @@ impl AutoContinueState {
             return false;
         }
 
+        if self.max_turns_reached {
+            return false;
+        }
+
         if self.last_turn_end_event_id.as_deref() == Some(event_id) {
             return false;
         }
         self.last_turn_end_event_id = Some(event_id.to_string());
 
-        if self.active_turn_id.as_deref() == Some(event_id) {
-            self.active_turn_id = None;
-        }
-
+        // Same reasoning as TurnComplete: if we missed TurnStarted, allow a
+        // temporary pause to be cleared by observing a turn-end event.
         if self.paused_until_next_turn {
-            return false;
+            self.paused_until_next_turn = false;
         }
 
         // User interrupt should behave like a fresh restart: do not auto-continue
@@ -661,6 +672,7 @@ impl AutoContinueState {
             .max_turns
             .is_some_and(|max_turns| self.turns_queued >= max_turns)
         {
+            self.max_turns_reached = true;
             self.paused_until_next_turn = true;
             return false;
         }
@@ -669,26 +681,8 @@ impl AutoContinueState {
         true
     }
 
-    fn should_enqueue_for_turn_end(
-        &mut self,
-        event_id: &str,
-        next: Option<codex_core::auto_continue::AutoModeNext>,
-        _turn_abort_reason: Option<codex_core::protocol::TurnAbortReason>,
-    ) -> bool {
-        if !self.enabled {
-            return false;
-        }
-
-        // `EventMsg::Error` can be emitted during startup or other background phases.
-        // Only treat it as a turn-ending event if we have an active turn with the same id.
-        if self.active_turn_id.as_deref() != Some(event_id) {
-            return false;
-        }
-
-        // Treat Error like "turn complete", but without a stop marker (since we don't
-        // have the agent's final message content).
-        self.should_enqueue_for_turn_complete(event_id, next)
-    }
+    // Errors are handled using `ChatWidget` state (whether a turn is currently running),
+    // rather than trying to correlate event ids across protocol layers.
 }
 
 impl App {
@@ -1344,6 +1338,7 @@ impl App {
                 };
                 self.chat_widget = ChatWidget::new(init, self.server.clone());
                 self.reset_thread_event_state();
+                self.auto_continue.reset_for_new_session();
                 if let Some(summary) = summary {
                     let mut lines: Vec<Line<'static>> = vec![summary.usage_line.clone().into()];
                     if let Some(command) = summary.resume_command {
@@ -1389,6 +1384,7 @@ impl App {
                                     resumed.session_configured,
                                 );
                                 self.reset_thread_event_state();
+                                self.auto_continue.reset_for_new_session();
                                 if let Some(summary) = summary {
                                     let mut lines: Vec<Line<'static>> =
                                         vec![summary.usage_line.clone().into()];
@@ -1439,6 +1435,7 @@ impl App {
                                 forked.session_configured,
                             );
                             self.reset_thread_event_state();
+                            self.auto_continue.reset_for_new_session();
                             if let Some(summary) = summary {
                                 let mut lines: Vec<Line<'static>> =
                                     vec![summary.usage_line.clone().into()];
@@ -2129,9 +2126,12 @@ impl App {
                 }
             }
             EventMsg::Error(_) => {
-                if self
-                    .auto_continue
-                    .should_enqueue_for_turn_end(&event.id, None, None)
+                // `EventMsg::Error` can be emitted during startup or other background phases.
+                // Only treat it as a turn-ending event if an agent turn is currently running.
+                if self.chat_widget.is_agent_turn_running()
+                    && self
+                        .auto_continue
+                        .should_enqueue_for_turn_complete(&event.id, None)
                 {
                     self.chat_widget.enqueue_auto_continue_prompt(
                         codex_core::auto_continue::AUTO_CONTINUE_FOLLOWUP_PROMPT.to_string(),
@@ -2963,13 +2963,14 @@ mod tests {
     }
 
     #[test]
-    fn auto_continue_ignores_background_error_without_turn() {
+    fn auto_continue_stop_is_temporary_even_without_turn_started() {
         let mut state = AutoContinueState::new(true, None);
-        // No TurnStarted observed.
-        assert!(!state.should_enqueue_for_turn_end("turn-1", None, None));
-
-        state.on_turn_started("turn-1");
-        assert!(state.should_enqueue_for_turn_end("turn-1", None, None));
+        assert!(!state.should_enqueue_for_turn_complete(
+            "turn-1",
+            Some(codex_core::auto_continue::AutoModeNext::Stop),
+        ));
+        // No TurnStarted observed, but the next turn-end should resume auto-continue.
+        assert!(state.should_enqueue_for_turn_complete("turn-2", None));
     }
 
     #[test]
