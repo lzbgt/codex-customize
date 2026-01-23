@@ -604,6 +604,12 @@ async fn run_ratatui_app(
         }
         _ => config,
     };
+    let mut config = config;
+    // Default to full tool output in the TUI transcript (no `… +N lines` elisions).
+    //
+    // This is intentionally forced in the TUI layer to ensure consistent behavior even when
+    // older config files (or missing `[tui]` tables) would otherwise default to truncated output.
+    config.show_full_tool_output = true;
     let active_profile = config.active_profile.clone();
     let should_show_trust_screen = should_show_trust_screen(&config);
 

@@ -2113,9 +2113,11 @@ impl App {
             EventMsg::TurnComplete(codex_core::protocol::TurnCompleteEvent {
                 last_agent_message,
             }) => {
-                let next = last_agent_message
-                    .as_deref()
-                    .and_then(codex_core::auto_continue::parse_auto_mode_next);
+                let next = self.chat_widget.auto_mode_next_directive().or_else(|| {
+                    last_agent_message
+                        .as_deref()
+                        .and_then(codex_core::auto_continue::parse_auto_mode_next)
+                });
                 if self
                     .auto_continue
                     .should_enqueue_for_turn_complete(&event.id, next)
@@ -2992,6 +2994,60 @@ mod tests {
                 text_elements: Vec::new(),
             }]
         );
+    }
+
+    #[tokio::test]
+    async fn auto_continue_respects_stop_marker_from_agent_transcript() {
+        let (mut app, mut _app_event_rx, mut op_rx) = make_test_app_with_channels().await;
+        app.auto_continue = AutoContinueState::new(true, None);
+
+        // Ensure the ChatWidget is configured so it can submit user turns.
+        let configured = SessionConfiguredEvent {
+            session_id: ThreadId::new(),
+            forked_from_id: None,
+            model: "gpt-test".to_string(),
+            model_provider_id: "test-provider".to_string(),
+            approval_policy: AskForApproval::Never,
+            sandbox_policy: SandboxPolicy::ReadOnly,
+            cwd: PathBuf::from("/home/user/project"),
+            reasoning_effort: None,
+            history_log_id: 0,
+            history_entry_count: 0,
+            initial_messages: None,
+            rollout_path: PathBuf::new(),
+        };
+        app.chat_widget.handle_codex_event(Event {
+            id: "session".to_string(),
+            msg: EventMsg::SessionConfigured(configured),
+        });
+        while op_rx.try_recv().is_ok() {}
+
+        // The stop marker can appear in the streamed agent transcript even when
+        // TurnComplete's `last_agent_message` is `None`.
+        app.handle_codex_event_now(Event {
+            id: "turn-1".to_string(),
+            msg: EventMsg::TurnStarted(codex_core::protocol::TurnStartedEvent {
+                model_context_window: None,
+            }),
+        });
+        app.handle_codex_event_now(Event {
+            id: "turn-1".to_string(),
+            msg: EventMsg::AgentMessage(codex_core::protocol::AgentMessageEvent {
+                message: "Done.\n\nAUTO_MODE_NEXT=stop\n".to_string(),
+            }),
+        });
+        app.handle_codex_event_now(Event {
+            id: "turn-1".to_string(),
+            msg: EventMsg::TurnComplete(codex_core::protocol::TurnCompleteEvent {
+                last_agent_message: None,
+            }),
+        });
+
+        while let Ok(op) = op_rx.try_recv() {
+            if matches!(op, Op::UserTurn { .. }) {
+                panic!("expected stop marker to suppress auto-continue follow-up");
+            }
+        }
     }
 
     #[test]

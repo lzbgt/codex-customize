@@ -466,6 +466,10 @@ pub(crate) struct ChatWidget {
     suppress_session_configured_redraw: bool,
     // User messages queued while a turn is in progress
     queued_user_messages: VecDeque<UserMessage>,
+    // Tracks the latest assistant text as observed by the UI stream so we can
+    // parse `AUTO_MODE_NEXT=continue|stop` reliably (even when TurnComplete's
+    // `last_agent_message` is `None`).
+    auto_continue_transcript: AutoContinueTranscriptState,
     // Pending notification to show when unfocused on next Draw
     pending_notification: Option<Notification>,
     /// When `Some`, the user has pressed a quit shortcut and the second press
@@ -505,6 +509,40 @@ pub(crate) struct ChatWidget {
     // Current session rollout path (if known)
     current_rollout_path: Option<PathBuf>,
     external_editor_state: ExternalEditorState,
+}
+
+#[derive(Debug, Default, Clone)]
+struct AutoContinueTranscriptState {
+    current_agent_message: String,
+    last_agent_message: Option<String>,
+}
+
+impl AutoContinueTranscriptState {
+    fn on_turn_started(&mut self) {
+        self.current_agent_message.clear();
+        self.last_agent_message = None;
+    }
+
+    fn on_agent_message_delta(&mut self, delta: &str) {
+        self.current_agent_message.push_str(delta);
+    }
+
+    fn on_agent_message_final(&mut self, message: &str) {
+        self.current_agent_message.clear();
+        self.current_agent_message.push_str(message);
+        self.last_agent_message = Some(message.to_string());
+    }
+
+    fn latest_agent_text(&self) -> Option<&str> {
+        if let Some(message) = self.last_agent_message.as_deref() {
+            return Some(message);
+        }
+        if self.current_agent_message.is_empty() {
+            None
+        } else {
+            Some(self.current_agent_message.as_str())
+        }
+    }
 }
 
 /// Snapshot of active-cell state that affects transcript overlay rendering.
@@ -802,6 +840,8 @@ impl ChatWidget {
     }
 
     fn on_agent_message(&mut self, message: String) {
+        self.auto_continue_transcript
+            .on_agent_message_final(&message);
         // If we have a stream_controller, then the final agent message is redundant and will be a
         // duplicate of what has already been streamed.
         if self.stream_controller.is_none() {
@@ -813,6 +853,7 @@ impl ChatWidget {
     }
 
     fn on_agent_message_delta(&mut self, delta: String) {
+        self.auto_continue_transcript.on_agent_message_delta(&delta);
         self.handle_streaming_delta(delta);
     }
 
@@ -860,6 +901,7 @@ impl ChatWidget {
     // Raw reasoning uses the same flow as summarized reasoning
 
     fn on_task_started(&mut self) {
+        self.auto_continue_transcript.on_turn_started();
         self.agent_turn_running = true;
         self.saw_plan_update_this_turn = false;
         self.bottom_pane.clear_quit_shortcut_hint();
@@ -2007,6 +2049,7 @@ impl ChatWidget {
             thread_id: None,
             forked_from: None,
             queued_user_messages: VecDeque::new(),
+            auto_continue_transcript: AutoContinueTranscriptState::default(),
             show_welcome_banner: is_first_run,
             suppress_session_configured_redraw: false,
             pending_notification: None,
@@ -2250,6 +2293,7 @@ impl ChatWidget {
             thread_id: None,
             forked_from: None,
             queued_user_messages: VecDeque::new(),
+            auto_continue_transcript: AutoContinueTranscriptState::default(),
             show_welcome_banner: false,
             suppress_session_configured_redraw: true,
             pending_notification: None,
@@ -2766,6 +2810,14 @@ impl ChatWidget {
     }
 
     pub(crate) fn enqueue_auto_continue_prompt(&mut self, prompt: String) {
+        // Avoid stacking duplicate auto-continue prompts in the queue.
+        //
+        // If a previous follow-up wasn't submitted (e.g., a manual user prompt was queued and
+        // consumed first), carrying the old follow-up forward into a later turn produces
+        // unexpected duplicates.
+        let prompt_text = prompt.as_str();
+        self.queued_user_messages.retain(|m| m.text != prompt_text);
+
         // Auto-continue is intended to behave like a queued user prompt that
         // should run after the current turn ends (and after any user-queued
         // messages typed during the turn). Therefore we always append.
@@ -2813,6 +2865,11 @@ impl ChatWidget {
             });
             return;
         }
+
+        // Starting a new agent turn should clear any prior AUTO_MODE_NEXT directive we observed
+        // from the transcript. This makes `AUTO_MODE_NEXT=stop` reliably temporary even if the
+        // protocol omits TurnStarted for some reason.
+        self.auto_continue_transcript.on_turn_started();
 
         for image in &local_images {
             items.push(UserInput::LocalImage {
@@ -5143,6 +5200,14 @@ impl ChatWidget {
 
     pub(crate) fn is_agent_turn_running(&self) -> bool {
         self.agent_turn_running
+    }
+
+    pub(crate) fn auto_mode_next_directive(
+        &self,
+    ) -> Option<codex_core::auto_continue::AutoModeNext> {
+        self.auto_continue_transcript
+            .latest_agent_text()
+            .and_then(codex_core::auto_continue::parse_auto_mode_next)
     }
 
     pub(crate) fn token_usage(&self) -> TokenUsage {

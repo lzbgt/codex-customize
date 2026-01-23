@@ -421,10 +421,11 @@ impl ExecCell {
 
         let mut lines: Vec<Line<'static>> = vec![header_line];
 
-        let continuation_lines = Self::limit_lines_from_start(
-            &continuation_lines,
-            layout.command_continuation_max_lines,
-        );
+        let continuation_lines = if self.show_full_tool_output() {
+            continuation_lines
+        } else {
+            Self::limit_lines_from_start(&continuation_lines, layout.command_continuation_max_lines)
+        };
         if !continuation_lines.is_empty() {
             lines.extend(prefix_lines(
                 continuation_lines,
