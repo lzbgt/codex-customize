@@ -554,6 +554,7 @@ struct AutoContinueState {
     max_turns_reached: bool,
     paused_until_next_turn: bool,
     last_turn_end_event_id: Option<String>,
+    last_user_input_request_event_id: Option<String>,
 }
 
 impl AutoContinueState {
@@ -565,6 +566,7 @@ impl AutoContinueState {
             max_turns_reached: false,
             paused_until_next_turn: false,
             last_turn_end_event_id: None,
+            last_user_input_request_event_id: None,
         }
     }
 
@@ -574,17 +576,31 @@ impl AutoContinueState {
         self.max_turns_reached = false;
         self.paused_until_next_turn = false;
         self.last_turn_end_event_id = None;
+        self.last_user_input_request_event_id = None;
     }
 
     fn on_turn_started(&mut self, event_id: &str) {
         // `AUTO_MODE_NEXT=stop` is temporary: as soon as a new turn begins (typically
         // from a manual user prompt), resume normal auto-continue behavior.
-        self.paused_until_next_turn = false;
+        if !self.max_turns_reached {
+            self.paused_until_next_turn = false;
+        }
 
         // Defensive: allow a future turn-end event with the same id to still enqueue
         // if the protocol ever reuses ids across streams.
         if self.last_turn_end_event_id.as_deref() == Some(event_id) {
             self.last_turn_end_event_id = None;
+        }
+        if self.last_user_input_request_event_id.as_deref() == Some(event_id) {
+            self.last_user_input_request_event_id = None;
+        }
+    }
+
+    fn on_user_message(&mut self) {
+        // User input begins a new turn boundary, so clear a temporary stop/interrupt pause.
+        // (Do not clear the max-turns safety stop.)
+        if !self.max_turns_reached {
+            self.paused_until_next_turn = false;
         }
     }
 
@@ -606,9 +622,9 @@ impl AutoContinueState {
         }
         self.last_turn_end_event_id = Some(event_id.to_string());
 
-        // If we missed the TurnStarted event (or it was filtered), treat a completed
+        // If we missed the TurnStarted or UserMessage boundary, treat a completed
         // turn as a resumption point. This prevents a "temporary stop" (or interrupt)
-        // pause from becoming permanent when TurnStarted isn't observed.
+        // pause from becoming permanent when turn-start events aren't observed.
         if self.paused_until_next_turn {
             self.paused_until_next_turn = false;
         }
@@ -650,8 +666,8 @@ impl AutoContinueState {
         }
         self.last_turn_end_event_id = Some(event_id.to_string());
 
-        // Same reasoning as TurnComplete: if we missed TurnStarted, allow a
-        // temporary pause to be cleared by observing a turn-end event.
+        // Same reasoning as TurnComplete: if we missed the TurnStarted/UserMessage boundary,
+        // allow a temporary pause to be cleared by observing a subsequent turn-end event.
         if self.paused_until_next_turn {
             self.paused_until_next_turn = false;
         }
@@ -678,6 +694,31 @@ impl AutoContinueState {
         }
 
         self.turns_queued += 1;
+        true
+    }
+
+    fn should_auto_answer_user_input_request(
+        &mut self,
+        event_id: &str,
+        next: Option<codex_core::auto_continue::AutoModeNext>,
+    ) -> bool {
+        if !self.enabled {
+            return false;
+        }
+        if self.max_turns_reached {
+            return false;
+        }
+        if self.paused_until_next_turn {
+            return false;
+        }
+        if matches!(next, Some(codex_core::auto_continue::AutoModeNext::Stop)) {
+            return false;
+        }
+
+        if self.last_user_input_request_event_id.as_deref() == Some(event_id) {
+            return false;
+        }
+        self.last_user_input_request_event_id = Some(event_id.to_string());
         true
     }
 
@@ -2103,12 +2144,16 @@ impl App {
             self.suppress_shutdown_complete = false;
             return;
         }
+        let mut forward_to_chat_widget = true;
         // Auto-continue must enqueue the follow-up prompt *before* the chat widget processes
         // turn-end events, since `ChatWidget` will immediately submit one queued prompt on
         // completion/errors.
         match &event.msg {
             EventMsg::TurnStarted(_) => {
                 self.auto_continue.on_turn_started(&event.id);
+            }
+            EventMsg::UserMessage(_) => {
+                self.auto_continue.on_user_message();
             }
             EventMsg::TurnComplete(codex_core::protocol::TurnCompleteEvent {
                 last_agent_message,
@@ -2140,6 +2185,44 @@ impl App {
                     );
                 }
             }
+            EventMsg::RequestUserInput(ev) => {
+                // `request_user_input` is a turn boundary: the agent is blocked until the user
+                // answers. If auto-continue is enabled, respond automatically with the curated
+                // continuation prompt (unless the agent explicitly requests stop).
+                let next = self.chat_widget.auto_mode_next_directive();
+                if self
+                    .auto_continue
+                    .should_auto_answer_user_input_request(&event.id, next)
+                {
+                    use std::collections::HashMap;
+
+                    let answers = ev
+                        .questions
+                        .iter()
+                        .map(|q| {
+                            (
+                                q.id.clone(),
+                                codex_protocol::request_user_input::RequestUserInputAnswer {
+                                    answers: vec![
+                                        codex_core::auto_continue::AUTO_CONTINUE_FOLLOWUP_PROMPT
+                                            .to_string(),
+                                    ],
+                                },
+                            )
+                        })
+                        .collect::<HashMap<_, _>>();
+
+                    self.chat_widget.submit_op(Op::UserInputAnswer {
+                        id: ev.turn_id.clone(),
+                        response: codex_protocol::request_user_input::RequestUserInputResponse {
+                            answers,
+                        },
+                    });
+
+                    // Skip showing the request overlay since we've auto-answered it.
+                    forward_to_chat_widget = false;
+                }
+            }
             EventMsg::TurnAborted(ev) => {
                 if self
                     .auto_continue
@@ -2158,7 +2241,9 @@ impl App {
             emit_skill_load_warnings(&self.app_event_tx, &errors);
         }
         self.handle_backtrack_event(&event.msg);
-        self.chat_widget.handle_codex_event(event);
+        if forward_to_chat_widget {
+            self.chat_widget.handle_codex_event(event);
+        }
     }
 
     fn handle_codex_event_replay(&mut self, event: Event) {
@@ -3048,6 +3133,81 @@ mod tests {
                 panic!("expected stop marker to suppress auto-continue follow-up");
             }
         }
+    }
+
+    #[tokio::test]
+    async fn auto_continue_auto_answers_request_user_input_with_followup_prompt() {
+        let (mut app, mut _app_event_rx, mut op_rx) = make_test_app_with_channels().await;
+        app.auto_continue = AutoContinueState::new(true, None);
+
+        // Ensure the ChatWidget is configured so it can submit ops.
+        let configured = SessionConfiguredEvent {
+            session_id: ThreadId::new(),
+            forked_from_id: None,
+            model: "gpt-test".to_string(),
+            model_provider_id: "test-provider".to_string(),
+            approval_policy: AskForApproval::Never,
+            sandbox_policy: SandboxPolicy::ReadOnly,
+            cwd: PathBuf::from("/home/user/project"),
+            reasoning_effort: None,
+            history_log_id: 0,
+            history_entry_count: 0,
+            initial_messages: None,
+            rollout_path: PathBuf::new(),
+        };
+        app.chat_widget.handle_codex_event(Event {
+            id: "session".to_string(),
+            msg: EventMsg::SessionConfigured(configured),
+        });
+        while op_rx.try_recv().is_ok() {}
+
+        app.handle_codex_event_now(Event {
+            id: "turn-1".to_string(),
+            msg: EventMsg::TurnStarted(codex_core::protocol::TurnStartedEvent {
+                model_context_window: None,
+            }),
+        });
+
+        app.handle_codex_event_now(Event {
+            id: "turn-1-request".to_string(),
+            msg: EventMsg::RequestUserInput(
+                codex_protocol::request_user_input::RequestUserInputEvent {
+                    call_id: "call-1".to_string(),
+                    turn_id: "turn-1".to_string(),
+                    questions: vec![
+                        codex_protocol::request_user_input::RequestUserInputQuestion {
+                            id: "q1".to_string(),
+                            header: "Next step".to_string(),
+                            question: "What should we do next?".to_string(),
+                            options: None,
+                        },
+                    ],
+                },
+            ),
+        });
+
+        assert_eq!(app.auto_continue.turns_queued, 0);
+
+        let mut got = None;
+        while let Ok(op) = op_rx.try_recv() {
+            if let Op::UserInputAnswer { id, response } = op {
+                got = Some((id, response));
+                break;
+            }
+        }
+
+        let (id, response) = got.expect("expected auto-answered request_user_input op");
+        assert_eq!(id, "turn-1");
+        assert_eq!(
+            response.answers.get("q1"),
+            Some(
+                &codex_protocol::request_user_input::RequestUserInputAnswer {
+                    answers: vec![
+                        codex_core::auto_continue::AUTO_CONTINUE_FOLLOWUP_PROMPT.to_string()
+                    ],
+                }
+            )
+        );
     }
 
     #[test]
