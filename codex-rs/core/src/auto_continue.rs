@@ -87,7 +87,7 @@ Continue.\n\
 - Use multiple plans within the turn when helpful (macro plan → micro steps), and update plan statuses as you execute.\n\
 - Keep the implementation SOLID and future-proof: reduce coupling, improve boundaries, and add tests that lock in behavior.\n\
 - If this repo uses a task tracker (e.g., TODO.md / issues), capture new tasks and re-prioritize succinctly.\n\
-- Keep the workspace lean: if large local build artifacts/caches were generated, prune them and keep only the necessary deliverables.\n\
+- Keep the workspace lean, but don’t delete useful caches by default: only prune build artifacts/caches if they are unusually large, clearly one-off, or the repo has an established cleanup workflow/script; otherwise keep caches that materially speed up iteration.\n\
 \n\
 End your final response with exactly one line:\n\
 AUTO_MODE_NEXT=continue\n\
