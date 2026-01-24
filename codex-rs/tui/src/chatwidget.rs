@@ -2170,8 +2170,8 @@ impl ChatWidget {
             retry_status_header: None,
             thread_id: None,
             forked_from: None,
-            saw_plan_update_this_turn: false,
             queued_user_messages: VecDeque::new(),
+            auto_continue_transcript: AutoContinueTranscriptState::default(),
             show_welcome_banner: is_first_run,
             suppress_session_configured_redraw: false,
             pending_notification: None,
@@ -2181,6 +2181,7 @@ impl ChatWidget {
             pre_review_token_info: None,
             needs_final_message_separator: false,
             had_work_activity: false,
+            saw_plan_update_this_turn: false,
             last_separator_elapsed_secs: None,
             last_rendered_width: std::cell::Cell::new(None),
             feedback,
@@ -2195,6 +2196,7 @@ impl ChatWidget {
         widget.bottom_pane.set_collaboration_modes_enabled(
             widget.config.features.enabled(Feature::CollaborationModes),
         );
+        widget.update_collaboration_mode_indicator();
 
         widget
     }
