@@ -1844,6 +1844,7 @@ persistence = "none"
                 show_tooltips: true,
                 experimental_mode: None,
                 alternate_screen: AltScreenMode::Auto,
+                show_full_tool_output: true,
             }
         );
     }
@@ -3729,6 +3730,7 @@ model_verbosity = "high"
                 animations: true,
                 show_tooltips: true,
                 experimental_mode: None,
+                show_full_tool_output: true,
                 analytics_enabled: Some(true),
                 feedback_enabled: true,
                 tui_alternate_screen: AltScreenMode::Auto,
@@ -3810,6 +3812,7 @@ model_verbosity = "high"
             animations: true,
             show_tooltips: true,
             experimental_mode: None,
+            show_full_tool_output: true,
             analytics_enabled: Some(true),
             feedback_enabled: true,
             tui_alternate_screen: AltScreenMode::Auto,
@@ -3906,6 +3909,7 @@ model_verbosity = "high"
             animations: true,
             show_tooltips: true,
             experimental_mode: None,
+            show_full_tool_output: true,
             analytics_enabled: Some(false),
             feedback_enabled: true,
             tui_alternate_screen: AltScreenMode::Auto,
@@ -3988,6 +3992,7 @@ model_verbosity = "high"
             animations: true,
             show_tooltips: true,
             experimental_mode: None,
+            show_full_tool_output: true,
             analytics_enabled: Some(true),
             feedback_enabled: true,
             tui_alternate_screen: AltScreenMode::Auto,
