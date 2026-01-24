@@ -72,7 +72,7 @@ pub const AUTO_CONTINUE_DEVELOPER_INSTRUCTIONS: &str = "\
   a. If new task(s) are identified, capture them in the repo’s task tracker (if any).\n\
   b. Reweight and update tasks in the tracker, keeping it succinct.\n\
   c. If tests pass and there are code and/or documentation changes, `git diff --stat`, then commit the changes. Pushing to the remote repository is optional and not a blocker for continuation.\n\
-  d. If you built large local artifacts, prune build outputs/caches (keep only the necessary deliverables).\n\
+  d. Keep the workspace lean, but don’t delete useful caches by default: only prune build artifacts/caches if they are unusually large, clearly one-off, or the repo has an established cleanup workflow/script; otherwise keep caches that materially speed up iteration.\n\
 - IMPORTANT: Doing a git commit and/or push does not imply stopping. Keep going unless you explicitly output `AUTO_MODE_NEXT=stop`.\n\
 - End your response with `AUTO_MODE_NEXT=continue` to request another turn, or `AUTO_MODE_NEXT=stop` to stop.\n\
 ";
