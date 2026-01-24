@@ -65,8 +65,8 @@ pub const AUTO_CONTINUE_DEVELOPER_INSTRUCTIONS: &str = "\
 - Optimize for correctness and robustness first, then performance (measure when possible).\n\
 - Keep documentation and implementation in sync: if behavior, APIs, configs, or workflows change, update the relevant docs/READMEs/examples so they remain correct.\n\
 - For complex changes, prefer drafting/updating a design/spec document first (even a short one): state goals, non-goals, constraints, and proposed architecture before implementing.\n\
-- If the previous turn surfaced important proposals/next steps, prioritize the most beneficial one before switching to unrelated work.\n\
-- Use the planning tool (`update_plan`) actively: create a macro plan early, refine into micro-steps, and update statuses multiple times within the same turn when it helps execution.\n\
+- If the previous turn surfaced important proposals/next steps, prioritize the most beneficial one first, then keep going with other high-leverage items while context is fresh.\n\
+- Use the planning tool (`update_plan`) actively: create a macro plan early, refine into micro-steps, and use multiple plans per turn when it improves throughput (finish one plan, then start the next).\n\
 - Implement as many tasks as possible in this turn.\n\
 - Before ending the turn:\n\
   a. If new task(s) are identified, capture them in the repo’s task tracker (if any).\n\
@@ -84,9 +84,9 @@ pub const AUTO_CONTINUE_DEVELOPER_INSTRUCTIONS: &str = "\
 pub const AUTO_CONTINUE_FOLLOWUP_PROMPT: &str = "\
 Continue.\n\
 \n\
-- Pick the highest-leverage next step based on the most recent turn (prefer fundamental fixes over ad-hoc tweaks; avoid “cheap work”).\n\
-- If the previous turn proposed important next steps, do the most beneficial one first.\n\
-- Use multiple plans within the turn when helpful (macro plan → micro steps), and update plan statuses as you execute.\n\
+- Pick a small set of high-leverage next steps (e.g., 2–5) based on the most recent turn (prefer fundamental fixes over ad-hoc tweaks; avoid “cheap work”).\n\
+- If the previous turn proposed important next steps, prioritize the most beneficial one first, then continue with the remaining high-leverage items while context is fresh.\n\
+- Use multiple plans within the turn (macro plan → micro steps). When you complete a plan, start the next plan without waiting, and update plan statuses as you execute.\n\
 - Keep the implementation SOLID and future-proof: reduce coupling, improve boundaries, and add tests that lock in behavior.\n\
 - Keep documentation and implementation in sync (update docs/READMEs/examples when behavior changes).\n\
 - For complex changes, draft/update a short design/spec first (goals, non-goals, constraints, architecture), then implement.\n\
