@@ -440,6 +440,12 @@ pub(crate) struct ChatWidget {
     /// This is kept separate from `mcp_startup_status` so that MCP startup progress (or completion)
     /// can update the status header without accidentally clearing the spinner for an active turn.
     agent_turn_running: bool,
+    /// Tracks whether we've submitted a new user turn but haven't yet observed TurnStarted.
+    ///
+    /// Without this, the UI can submit multiple turns back-to-back during the idle → running
+    /// transition (e.g., when flushing queued prompts), which looks like "duplicated prompts"
+    /// and can confuse auto-continue.
+    turn_submission_pending: bool,
     /// Tracks per-server MCP startup state while startup is in progress.
     ///
     /// The map is `Some(_)` from the first `McpStartupUpdate` until `McpStartupComplete`, and the
@@ -902,6 +908,7 @@ impl ChatWidget {
 
     fn on_task_started(&mut self) {
         self.auto_continue_transcript.on_turn_started();
+        self.turn_submission_pending = false;
         self.agent_turn_running = true;
         self.saw_plan_update_this_turn = false;
         self.bottom_pane.clear_quit_shortcut_hint();
@@ -921,6 +928,7 @@ impl ChatWidget {
         self.flush_answer_stream_with_separator();
         self.flush_unified_exec_wait_streak();
         // Mark task stopped and request redraw now that all content is in history.
+        self.turn_submission_pending = false;
         self.agent_turn_running = false;
         self.update_task_running_state();
         self.running_commands.clear();
@@ -1137,6 +1145,7 @@ impl ChatWidget {
         // Ensure any spinner is replaced by a red ✗ and flushed into history.
         self.finalize_active_cell_as_failed();
         // Reset running state and clear streaming buffers.
+        self.turn_submission_pending = false;
         self.agent_turn_running = false;
         self.update_task_running_state();
         self.running_commands.clear();
@@ -2040,6 +2049,7 @@ impl ChatWidget {
             task_complete_pending: false,
             unified_exec_processes: Vec::new(),
             agent_turn_running: false,
+            turn_submission_pending: false,
             mcp_startup_status: None,
             interrupts: InterruptManager::new(),
             reasoning_buffer: String::new(),
@@ -2162,6 +2172,7 @@ impl ChatWidget {
             task_complete_pending: false,
             unified_exec_processes: Vec::new(),
             agent_turn_running: false,
+            turn_submission_pending: false,
             mcp_startup_status: None,
             interrupts: InterruptManager::new(),
             reasoning_buffer: String::new(),
@@ -2286,6 +2297,7 @@ impl ChatWidget {
             task_complete_pending: false,
             unified_exec_processes: Vec::new(),
             agent_turn_running: false,
+            turn_submission_pending: false,
             mcp_startup_status: None,
             interrupts: InterruptManager::new(),
             reasoning_buffer: String::new(),
@@ -2803,7 +2815,11 @@ impl ChatWidget {
         //
         // MCP startup is intentionally treated as a background lifecycle: it can overlap with
         // interactive use and should not make the UI feel "stuck" (especially after interrupts).
-        if !self.is_session_configured() || self.agent_turn_running || self.is_review_mode {
+        if !self.is_session_configured()
+            || self.agent_turn_running
+            || self.turn_submission_pending
+            || self.is_review_mode
+        {
             self.queued_user_messages.push_back(user_message);
             self.refresh_queued_user_messages();
         } else {
@@ -2829,6 +2845,125 @@ impl ChatWidget {
         // If the UI thinks we're already idle (e.g., missing TurnStarted/TurnComplete events,
         // or a restart boundary), kick the queue so the follow-up prompt actually runs.
         self.maybe_send_next_queued_input();
+    }
+
+    fn submit_user_messages_as_single_turn(&mut self, messages: Vec<UserMessage>) {
+        if !self.is_session_configured() {
+            tracing::warn!("cannot submit user messages before session is configured; queueing");
+            for message in messages.into_iter().rev() {
+                self.queued_user_messages.push_front(message);
+            }
+            self.refresh_queued_user_messages();
+            return;
+        }
+
+        if messages.is_empty() {
+            return;
+        }
+
+        // Special-case: if any queued item is a local user shell command ("!cmd"), preserve the
+        // existing semantics by submitting only the first message. (User shell commands are not
+        // model turns and should not be batched into a UserTurn.)
+        if messages
+            .iter()
+            .any(|message| message.text.strip_prefix('!').is_some())
+        {
+            let mut iter = messages.into_iter();
+            let first = iter.next().expect("messages is non-empty");
+            for message in iter.rev() {
+                self.queued_user_messages.push_front(message);
+            }
+            self.refresh_queued_user_messages();
+            self.submit_user_message(first);
+            // If the first message was a user shell command, we're still idle and can
+            // immediately attempt to submit the remaining queued messages.
+            self.maybe_send_next_queued_input();
+            return;
+        }
+
+        // Starting a new agent turn should clear any prior AUTO_MODE_NEXT directive we observed
+        // from the transcript. This makes `AUTO_MODE_NEXT=stop` reliably temporary even if the
+        // protocol omits TurnStarted for some reason.
+        self.auto_continue_transcript.on_turn_started();
+
+        let mut items: Vec<UserInput> = Vec::new();
+        let mut next_image_label = 1usize;
+
+        for message in messages {
+            let message = remap_placeholders_for_message(message, &mut next_image_label);
+            let UserMessage {
+                text,
+                local_images,
+                text_elements,
+            } = message;
+
+            if text.is_empty() && local_images.is_empty() {
+                continue;
+            }
+
+            for image in &local_images {
+                items.push(UserInput::LocalImage {
+                    path: image.path.clone(),
+                });
+            }
+
+            if !text.is_empty() {
+                items.push(UserInput::Text {
+                    text: text.clone(),
+                    text_elements: text_elements.clone(),
+                });
+
+                if let Some(skills) = self.bottom_pane.skills() {
+                    let skill_mentions = find_skill_mentions(&text, skills);
+                    for skill in skill_mentions {
+                        items.push(UserInput::Skill {
+                            name: skill.name.clone(),
+                            path: skill.path.clone(),
+                        });
+                    }
+                }
+
+                // Persist the text to cross-session message history.
+                self.codex_op_tx
+                    .send(Op::AddToHistory { text: text.clone() })
+                    .unwrap_or_else(|e| {
+                        tracing::error!("failed to send AddHistory op: {e}");
+                    });
+
+                // Only show the text portion in conversation history.
+                let local_image_paths = local_images.iter().map(|img| img.path.clone()).collect();
+                self.add_to_history(history_cell::new_user_prompt(
+                    text,
+                    text_elements,
+                    local_image_paths,
+                ));
+            }
+        }
+
+        if items.is_empty() {
+            return;
+        }
+
+        let op = Op::UserTurn {
+            items,
+            cwd: self.config.cwd.clone(),
+            approval_policy: self.config.approval_policy.value(),
+            sandbox_policy: self.config.sandbox_policy.get().clone(),
+            model: self.stored_collaboration_mode.model().to_string(),
+            effort: self.stored_collaboration_mode.reasoning_effort(),
+            summary: self.config.model_reasoning_summary,
+            final_output_json_schema: None,
+            collaboration_mode: self
+                .collaboration_modes_enabled()
+                .then(|| self.stored_collaboration_mode.clone()),
+            personality: None,
+        };
+
+        self.codex_op_tx.send(op).unwrap_or_else(|e| {
+            tracing::error!("failed to send message: {e}");
+        });
+        self.turn_submission_pending = true;
+        self.needs_final_message_separator = false;
     }
 
     fn submit_user_message(&mut self, user_message: UserMessage) {
@@ -2914,6 +3049,7 @@ impl ChatWidget {
         self.codex_op_tx.send(op).unwrap_or_else(|e| {
             tracing::error!("failed to send message: {e}");
         });
+        self.turn_submission_pending = true;
 
         // Persist the text to cross-session message history.
         if !text.is_empty() {
@@ -3229,14 +3365,22 @@ impl ChatWidget {
         //
         // - Block while an agent turn is active; MCP startup can overlap with interaction.
         // - Block while review mode is active; review uses its own submission flow.
-        if self.agent_turn_running || self.is_review_mode {
+        if self.agent_turn_running || self.turn_submission_pending || self.is_review_mode {
             return;
         }
-        if let Some(user_message) = self.queued_user_messages.pop_front() {
-            self.submit_user_message(user_message);
+        if self.queued_user_messages.is_empty() {
+            self.refresh_queued_user_messages();
+            return;
         }
-        // Update the list to reflect the remaining queued messages (if any).
+
+        // Submit all queued user messages as a single UserTurn, in-order, to avoid leaving
+        // follow-up prompts (including auto-continue) stranded behind earlier queued input.
+        let mut messages = Vec::new();
+        while let Some(message) = self.queued_user_messages.pop_front() {
+            messages.push(message);
+        }
         self.refresh_queued_user_messages();
+        self.submit_user_messages_as_single_turn(messages);
     }
 
     /// Rebuild and update the queued user messages from the current queue.
