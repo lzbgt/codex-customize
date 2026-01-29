@@ -72,9 +72,8 @@ pub const AUTO_CONTINUE_DEVELOPER_INSTRUCTIONS: &str = "\
 - Before ending the turn:\n\
   a. If new task(s) are identified, capture them in the repo’s task tracker (if any).\n\
   b. Reweight and update tasks in the tracker, keeping it succinct.\n\
-  c. Verify changes (tests/build/lint as appropriate). If there are code and/or documentation changes, `git diff --stat`, then commit the changes, and push to the default remote branch unless explicitly told not to.\n\
+  c. Verify changes (tests/build/lint as appropriate). If there are code and/or documentation changes, `git diff --stat`, then commit the changes. If the repo has a writable remote and pushing is permitted, push; otherwise note why push was skipped.\n\
   d. Keep the workspace lean, but don’t delete useful caches by default: only prune build artifacts/caches if they are unusually large, clearly one-off, or the repo has an established cleanup workflow/script; otherwise keep caches that materially speed up iteration.\n\
-- IMPORTANT: Doing a git commit and/or push does not imply stopping. Keep going unless you explicitly output `AUTO_MODE_NEXT=stop`.\n\
 - End your response with `AUTO_MODE_NEXT=continue` to request another turn, or `AUTO_MODE_NEXT=stop` to stop.\n\
 ";
 
@@ -85,18 +84,27 @@ pub const AUTO_CONTINUE_DEVELOPER_INSTRUCTIONS: &str = "\
 pub const AUTO_CONTINUE_FOLLOWUP_PROMPT: &str = "\
 Continue.\n\
 \n\
-- Pick a small set of high-leverage next steps (e.g., 2–5) based on the most recent turn (prefer fundamental fixes over ad-hoc tweaks; avoid “cheap work”).\n\
-- If the previous turn proposed important next steps, prioritize the most beneficial one first, then continue with the remaining high-leverage items while context is fresh.\n\
-- Use multiple plans within the turn (macro plan → micro steps). When you complete a plan, start the next plan without waiting, and update plan statuses as you execute.\n\
-- If multiple tasks remain, batch several into one coherent patch (substantial progress—often hundreds to ~1000+ lines across code + docs—rather than stopping after tiny edits). Do not pad the diff; make meaningful changes.\n\
-- Keep the implementation SOLID and future-proof: reduce coupling, improve boundaries, and add tests that lock in behavior.\n\
-- Keep documentation and implementation in sync (update docs/READMEs/examples when behavior changes).\n\
-- For complex changes, draft/update a short design/spec first (goals, non-goals, constraints, architecture), then implement.\n\
-- If this repo uses a task tracker (e.g., TODO.md / issues), capture new tasks and re-prioritize succinctly.\n\
-- Keep the workspace lean, but don’t delete useful caches by default: only prune build artifacts/caches if they are unusually large, clearly one-off, or the repo has an established cleanup workflow/script; otherwise keep caches that materially speed up iteration.\n\
+- Use the most recent context and proceed without waiting for user input.\n\
 \n\
-Before ending the turn, verify and publish:\n\
-- Run appropriate verification (tests/build/lint). If changes are ready, commit and push to the default remote branch unless explicitly told not to.\n\
+Priority:\n\
+1) If the most recent user message contains explicit tasks/questions, execute those first (avoid repeating generic process boilerplate).\n\
+2) Else if the most recent assistant message ended with choices/options:\n\
+   - Pick the single best default option using future-proof engineering judgement (SOLID, low maintenance, robust, efficient).\n\
+   - Prefer reversible/low-risk moves when uncertainty is high.\n\
+   - Ask a clarifying question only if the choice materially affects correctness, data loss, security, or long-term architecture.\n\
+   - If you do ask, ask exactly one tight question and propose a default you will proceed with if unanswered.\n\
+3) Else: pick a batch of high-leverage tasks (typically 2–6) that compound and reduce future maintenance.\n\
+\n\
+Execution style:\n\
+- Use multiple plans within the turn (macro plan → micro steps). Finish one plan, then start the next without stopping; update plan statuses as you execute.\n\
+- Prefer fundamental fixes over ad-hoc tweaks. Keep the implementation SOLID and future-proof (reduce coupling, improve boundaries, add tests that lock in behavior).\n\
+- Keep documentation and implementation in sync: when behavior/config/workflows change, update docs/READMEs/examples/help text so they remain correct.\n\
+- Maintain a succinct task tracker (if present): add newly discovered tasks and reweight/reprioritize.\n\
+- Keep the workspace lean, but don’t delete useful caches by default: only prune unusually large or clearly one-off artifacts, or follow an established cleanup workflow/script.\n\
+\n\
+Before ending the turn:\n\
+- Run appropriate verification (tests/build/lint) for the changes you made.\n\
+- If there are code and/or documentation changes: show `git diff --stat`, commit, and push if the repo has a writable remote and pushing is permitted (otherwise note why push was skipped).\n\
 \n\
 End your final response with exactly one line:\n\
 AUTO_MODE_NEXT=continue\n\
