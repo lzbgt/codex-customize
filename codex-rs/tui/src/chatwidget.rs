@@ -472,6 +472,16 @@ pub(crate) struct ChatWidget {
     suppress_session_configured_redraw: bool,
     // User messages queued while a turn is in progress
     queued_user_messages: VecDeque<UserMessage>,
+    // Auto-continue prompt armed at end-of-turn.
+    //
+    // This is intentionally *not* stored in `queued_user_messages`:
+    // - it should not appear in the "queued messages" UI
+    // - it should not persist across unrelated turns
+    // - it must not be re-queued by batching fallbacks (e.g. local `!cmd`)
+    //
+    // When set, the next idle boundary will submit it (possibly batched with any
+    // user-queued messages typed during the previous turn).
+    pending_auto_continue_prompt: Option<String>,
     // Tracks the latest assistant text as observed by the UI stream so we can
     // parse `AUTO_MODE_NEXT=continue|stop` reliably (even when TurnComplete's
     // `last_agent_message` is `None`).
@@ -2063,6 +2073,7 @@ impl ChatWidget {
             thread_id: None,
             forked_from: None,
             queued_user_messages: VecDeque::new(),
+            pending_auto_continue_prompt: None,
             auto_continue_transcript: AutoContinueTranscriptState::default(),
             show_welcome_banner: is_first_run,
             suppress_session_configured_redraw: false,
@@ -2186,6 +2197,7 @@ impl ChatWidget {
             thread_id: None,
             forked_from: None,
             queued_user_messages: VecDeque::new(),
+            pending_auto_continue_prompt: None,
             auto_continue_transcript: AutoContinueTranscriptState::default(),
             show_welcome_banner: is_first_run,
             suppress_session_configured_redraw: false,
@@ -2311,6 +2323,7 @@ impl ChatWidget {
             thread_id: None,
             forked_from: None,
             queued_user_messages: VecDeque::new(),
+            pending_auto_continue_prompt: None,
             auto_continue_transcript: AutoContinueTranscriptState::default(),
             show_welcome_banner: false,
             suppress_session_configured_redraw: true,
@@ -2822,6 +2835,7 @@ impl ChatWidget {
         if !self.is_session_configured()
             || self.agent_turn_running
             || self.turn_submission_pending
+            || self.pending_auto_continue_prompt.is_some()
             || self.is_review_mode
         {
             self.queued_user_messages.push_back(user_message);
@@ -2832,22 +2846,16 @@ impl ChatWidget {
     }
 
     pub(crate) fn enqueue_auto_continue_prompt(&mut self, prompt: String) {
-        // Avoid stacking duplicate auto-continue prompts in the queue.
+        // Auto-continue must never live in the user-visible queue, otherwise it can
+        // "stick" across turns and surface as a duplicate later.
         //
-        // If a previous follow-up wasn't submitted (e.g., a manual user prompt was queued and
-        // consumed first), carrying the old follow-up forward into a later turn produces
-        // unexpected duplicates.
-        let prompt_text = prompt.as_str();
-        self.queued_user_messages.retain(|m| m.text != prompt_text);
-
-        // Auto-continue is intended to behave like a queued user prompt that
-        // should run after the current turn ends (and after any user-queued
-        // messages typed during the turn). Therefore we always append.
-        self.queued_user_messages.push_back(prompt.into());
-        self.refresh_queued_user_messages();
+        // Instead, arm it as a one-shot prompt to be submitted at the next idle boundary.
+        if self.pending_auto_continue_prompt.as_deref() != Some(prompt.as_str()) {
+            self.pending_auto_continue_prompt = Some(prompt);
+        }
 
         // If the UI thinks we're already idle (e.g., missing TurnStarted/TurnComplete events,
-        // or a restart boundary), kick the queue so the follow-up prompt actually runs.
+        // or a restart boundary), kick submission so the follow-up prompt actually runs.
         self.maybe_send_next_queued_input();
     }
 
@@ -3369,6 +3377,10 @@ impl ChatWidget {
 
     // If idle and there are queued inputs, submit exactly one to start the next turn.
     fn maybe_send_next_queued_input(&mut self) {
+        if !self.is_session_configured() {
+            return;
+        }
+
         // Only submit queued inputs when the session is interactive and idle.
         //
         // - Block while an agent turn is active; MCP startup can overlap with interaction.
@@ -3376,17 +3388,44 @@ impl ChatWidget {
         if self.agent_turn_running || self.turn_submission_pending || self.is_review_mode {
             return;
         }
-        if self.queued_user_messages.is_empty() {
+        if self.queued_user_messages.is_empty() && self.pending_auto_continue_prompt.is_none() {
             self.refresh_queued_user_messages();
             return;
         }
 
-        // Submit all queued user messages as a single UserTurn, in-order, to avoid leaving
-        // follow-up prompts (including auto-continue) stranded behind earlier queued input.
+        // Preserve existing semantics for local user shell commands ("!cmd"): these are not model
+        // turns and must not be batched into a `UserTurn`. If the queue contains any shell command
+        // at all, submit exactly one queued message (in order) and keep any pending auto-continue
+        // prompt armed for later.
+        //
+        // This also prevents the auto-continue prompt from being pushed back into the visible
+        // queue by `submit_user_messages_as_single_turn`'s shell-command fallback.
+        if self
+            .queued_user_messages
+            .iter()
+            .any(|message| message.text.strip_prefix('!').is_some())
+        {
+            let first = self
+                .queued_user_messages
+                .pop_front()
+                .expect("queue is non-empty");
+            self.refresh_queued_user_messages();
+            self.submit_user_message(first);
+            self.maybe_send_next_queued_input();
+            return;
+        }
+
+        // Submit queued user messages (if any) and an armed auto-continue prompt (if any) as a
+        // single UserTurn, in-order. The auto-continue prompt is appended but never stored in the
+        // visible queue.
         let mut messages = Vec::new();
         while let Some(message) = self.queued_user_messages.pop_front() {
             messages.push(message);
         }
+        if let Some(prompt) = self.pending_auto_continue_prompt.take() {
+            messages.push(prompt.into());
+        }
+
         self.refresh_queued_user_messages();
         self.submit_user_messages_as_single_turn(messages);
     }
