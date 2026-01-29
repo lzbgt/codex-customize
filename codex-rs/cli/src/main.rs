@@ -830,6 +830,9 @@ fn merge_interactive_cli_flags(interactive: &mut TuiCli, subcommand_cli: TuiCli)
     if subcommand_cli.oss {
         interactive.oss = true;
     }
+    if let Some(oss_provider) = subcommand_cli.oss_provider {
+        interactive.oss_provider = Some(oss_provider);
+    }
     if let Some(profile) = subcommand_cli.config_profile {
         interactive.config_profile = Some(profile);
     }
@@ -850,6 +853,15 @@ fn merge_interactive_cli_flags(interactive: &mut TuiCli, subcommand_cli: TuiCli)
     }
     if subcommand_cli.web_search {
         interactive.web_search = true;
+    }
+    if subcommand_cli.auto_continue {
+        interactive.auto_continue = true;
+    }
+    if let Some(max_turns) = subcommand_cli.auto_continue_max_turns {
+        interactive.auto_continue_max_turns = Some(max_turns);
+    }
+    if subcommand_cli.no_alt_screen {
+        interactive.no_alt_screen = true;
     }
     if !subcommand_cli.images.is_empty() {
         interactive.images = subcommand_cli.images;
