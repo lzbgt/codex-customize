@@ -845,9 +845,11 @@ impl ChatWidget {
         self.request_redraw();
     }
 
-    fn on_agent_message(&mut self, message: String) {
-        self.auto_continue_transcript
-            .on_agent_message_final(&message);
+    fn on_agent_message(&mut self, message: String, from_replay: bool) {
+        if !from_replay {
+            self.auto_continue_transcript
+                .on_agent_message_final(&message);
+        }
         // If we have a stream_controller, then the final agent message is redundant and will be a
         // duplicate of what has already been streamed.
         if self.stream_controller.is_none() {
@@ -858,8 +860,10 @@ impl ChatWidget {
         self.request_redraw();
     }
 
-    fn on_agent_message_delta(&mut self, delta: String) {
-        self.auto_continue_transcript.on_agent_message_delta(&delta);
+    fn on_agent_message_delta(&mut self, delta: String, from_replay: bool) {
+        if !from_replay {
+            self.auto_continue_transcript.on_agent_message_delta(&delta);
+        }
         self.handle_streaming_delta(delta);
     }
 
@@ -3124,9 +3128,11 @@ impl ChatWidget {
 
         match msg {
             EventMsg::SessionConfigured(e) => self.on_session_configured(e),
-            EventMsg::AgentMessage(AgentMessageEvent { message }) => self.on_agent_message(message),
+            EventMsg::AgentMessage(AgentMessageEvent { message }) => {
+                self.on_agent_message(message, from_replay)
+            }
             EventMsg::AgentMessageDelta(AgentMessageDeltaEvent { delta }) => {
-                self.on_agent_message_delta(delta)
+                self.on_agent_message_delta(delta, from_replay)
             }
             EventMsg::AgentReasoningDelta(AgentReasoningDeltaEvent { delta })
             | EventMsg::AgentReasoningRawContentDelta(AgentReasoningRawContentDeltaEvent {
@@ -3218,7 +3224,9 @@ impl ChatWidget {
                 self.on_entered_review_mode(review_request, from_replay)
             }
             EventMsg::ExitedReviewMode(review) => self.on_exited_review_mode(review),
-            EventMsg::ContextCompacted(_) => self.on_agent_message("Context compacted".to_owned()),
+            EventMsg::ContextCompacted(_) => {
+                self.on_agent_message("Context compacted".to_owned(), from_replay)
+            }
             EventMsg::CollabAgentSpawnBegin(_) => {}
             EventMsg::CollabAgentSpawnEnd(ev) => self.on_collab_event(collab::spawn_end(ev)),
             EventMsg::CollabAgentInteractionBegin(_) => {}
