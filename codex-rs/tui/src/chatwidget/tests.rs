@@ -23,6 +23,7 @@ use codex_core::config::ConstraintError;
 use codex_core::config_loader::RequirementSource;
 use codex_core::features::Feature;
 use codex_core::models_manager::manager::ModelsManager;
+use codex_core::protocol::AgentMessageContentDeltaEvent;
 use codex_core::protocol::AgentMessageDeltaEvent;
 use codex_core::protocol::AgentMessageEvent;
 use codex_core::protocol::AgentReasoningDeltaEvent;
@@ -829,6 +830,7 @@ async fn make_chatwidget_manual(
         task_complete_pending: false,
         unified_exec_processes: Vec::new(),
         agent_turn_running: false,
+        turn_submission_pending: false,
         mcp_startup_status: None,
         interrupts: InterruptManager::new(),
         reasoning_buffer: String::new(),
@@ -840,6 +842,7 @@ async fn make_chatwidget_manual(
         frame_requester: FrameRequester::test_dummy(),
         show_welcome_banner: true,
         queued_user_messages: VecDeque::new(),
+        pending_auto_continue_prompt: None,
         auto_continue_transcript: AutoContinueTranscriptState::default(),
         suppress_session_configured_redraw: false,
         pending_notification: None,
@@ -1745,7 +1748,7 @@ async fn streaming_final_answer_keeps_task_running_state() {
     chat.thread_id = Some(ThreadId::new());
 
     chat.on_task_started();
-    chat.on_agent_message_delta("Final answer line\n".to_string());
+    chat.on_agent_message_delta("Final answer line\n".to_string(), false);
     chat.on_commit_tick();
 
     assert!(chat.bottom_pane.is_task_running());
@@ -1768,6 +1771,54 @@ async fn streaming_final_answer_keeps_task_running_state() {
         other => panic!("expected Op::Interrupt, got {other:?}"),
     }
     assert!(!chat.bottom_pane.quit_shortcut_hint_visible());
+}
+
+#[tokio::test]
+async fn agent_message_content_delta_is_ignored_to_avoid_duplicate_streaming() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(None).await;
+
+    chat.dispatch_event_msg(
+        None,
+        EventMsg::AgentMessageContentDelta(AgentMessageContentDeltaEvent {
+            thread_id: "thread".to_string(),
+            turn_id: "turn".to_string(),
+            item_id: "item".to_string(),
+            delta: "Hello".to_string(),
+        }),
+        false,
+    );
+
+    // codex-core also emits a legacy AgentMessageDelta derived from the same content delta. If the
+    // TUI rendered both event types, this would result in duplicated text ("HelloHello").
+    chat.dispatch_event_msg(
+        None,
+        EventMsg::AgentMessageDelta(AgentMessageDeltaEvent {
+            delta: "Hello".to_string(),
+        }),
+        false,
+    );
+    chat.dispatch_event_msg(
+        None,
+        EventMsg::AgentMessageDelta(AgentMessageDeltaEvent {
+            delta: "\n".to_string(),
+        }),
+        false,
+    );
+    chat.on_commit_tick();
+
+    let rendered_cells = drain_insert_history(&mut rx);
+    assert_eq!(
+        rendered_cells.len(),
+        1,
+        "expected one streamed history cell"
+    );
+
+    let rendered = lines_to_single_string(&rendered_cells[0]);
+    assert_eq!(
+        rendered.matches("Hello").count(),
+        1,
+        "expected to see exactly one 'Hello' occurrence, got:\n{rendered}"
+    );
 }
 
 #[tokio::test]

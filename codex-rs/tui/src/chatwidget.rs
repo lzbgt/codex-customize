@@ -3246,6 +3246,9 @@ impl ChatWidget {
             EventMsg::CollabCloseBegin(_) => {}
             EventMsg::CollabCloseEnd(ev) => self.on_collab_event(collab::close_end(ev)),
             EventMsg::ThreadRolledBack(_) => {}
+            // codex-core emits both "item-based" events and legacy equivalents (via
+            // `HasLegacyEvent::as_legacy_events`). The TUI intentionally renders the legacy stream
+            // and ignores item-based deltas; handling both would duplicate transcript content.
             EventMsg::RawResponseItem(_)
             | EventMsg::ItemStarted(_)
             | EventMsg::ItemCompleted(_)

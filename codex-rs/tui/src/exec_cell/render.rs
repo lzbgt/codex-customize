@@ -19,7 +19,6 @@ use codex_core::protocol::ExecCommandSource;
 use codex_protocol::parse_command::ParsedCommand;
 use itertools::Itertools;
 use ratatui::prelude::*;
-use ratatui::style::Modifier;
 use ratatui::style::Stylize;
 use textwrap::WordSplitter;
 use unicode_width::UnicodeWidthStr;
@@ -140,9 +139,6 @@ pub(crate) fn output_lines(
             "    "
         };
         line.spans.insert(0, prefix.into());
-        line.spans.iter_mut().for_each(|span| {
-            span.style = span.style.add_modifier(Modifier::DIM);
-        });
         out.push(line);
     }
 
@@ -167,9 +163,6 @@ pub(crate) fn output_lines(
         if include_prefix {
             line.spans.insert(0, "    ".into());
         }
-        line.spans.iter_mut().for_each(|span| {
-            span.style = span.style.add_modifier(Modifier::DIM);
-        });
         out.push(line);
     }
 
@@ -456,10 +449,7 @@ impl ExecCell {
                     let output_opts = RtOptions::new(output_wrap_width)
                         .word_splitter(WordSplitter::NoHyphenation);
                     for raw in output_text.lines() {
-                        let mut line = ansi_escape_line(raw);
-                        line.spans.iter_mut().for_each(|span| {
-                            span.style = span.style.add_modifier(Modifier::DIM);
-                        });
+                        let line = ansi_escape_line(raw);
                         push_owned_lines(
                             &word_wrap_line(&line, output_opts.clone()),
                             &mut wrapped_output,
