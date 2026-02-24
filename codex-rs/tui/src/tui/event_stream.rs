@@ -20,6 +20,7 @@
 use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::TryLockError;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::task::Context;
@@ -198,11 +199,14 @@ impl<S: EventSource + Default + Unpin> TuiEventStream<S> {
         // until we return a mapped event, hit Pending, or see EOF/error.
         loop {
             let poll_result = {
-                let mut state = self
-                    .broker
-                    .state
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let mut state = match self.broker.state.try_lock() {
+                    Ok(guard) => guard,
+                    Err(TryLockError::Poisoned(guard)) => guard.into_inner(),
+                    Err(TryLockError::WouldBlock) => {
+                        cx.waker().wake_by_ref();
+                        return Poll::Pending;
+                    }
+                };
                 let events = match state.active_event_source_mut() {
                     Some(events) => events,
                     None => {
