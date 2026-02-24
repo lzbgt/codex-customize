@@ -24,6 +24,8 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::task::Context;
 use std::task::Poll;
+use std::time::Duration;
+use std::time::Instant;
 
 use crossterm::event::Event;
 use tokio::sync::broadcast;
@@ -142,6 +144,8 @@ pub struct TuiEventStream<S: EventSource + Default + Unpin = CrosstermEventSourc
     resume_stream: WatchStream<()>,
     terminal_focused: Arc<AtomicBool>,
     poll_draw_first: bool,
+    last_crossterm_restart_at: Option<Instant>,
+    last_crossterm_warn_at: Option<Instant>,
     #[cfg(unix)]
     suspend_context: crate::tui::job_control::SuspendContext,
     #[cfg(unix)]
@@ -163,6 +167,8 @@ impl<S: EventSource + Default + Unpin> TuiEventStream<S> {
             resume_stream,
             terminal_focused,
             poll_draw_first: false,
+            last_crossterm_restart_at: None,
+            last_crossterm_warn_at: None,
             #[cfg(unix)]
             suspend_context,
             #[cfg(unix)]
@@ -173,8 +179,9 @@ impl<S: EventSource + Default + Unpin> TuiEventStream<S> {
     /// Poll the shared crossterm stream for the next mapped `TuiEvent`.
     ///
     /// This skips events we don't use (mouse events, etc.) and keeps polling until it yields
-    /// a mapped event, hits `Pending`, or sees EOF/error. When the broker is paused, it drops
-    /// the underlying stream and returns `Pending` to fully release stdin.
+    /// a mapped event, hits `Pending`, or restarts the underlying stream after EOF/error.
+    /// When the broker is paused, it drops the underlying stream and returns `Pending` to fully
+    /// release stdin.
     pub fn poll_crossterm_event(&mut self, cx: &mut Context<'_>) -> Poll<Option<TuiEvent>> {
         // Some crossterm events map to None (e.g. FocusLost, mouse); loop so we keep polling
         // until we return a mapped event, hit Pending, or see EOF/error.
@@ -201,7 +208,8 @@ impl<S: EventSource + Default + Unpin> TuiEventStream<S> {
                     Poll::Ready(Some(Ok(event))) => Some(event),
                     Poll::Ready(Some(Err(_))) | Poll::Ready(None) => {
                         *state = EventBrokerState::Start;
-                        return Poll::Ready(None);
+                        drop(state);
+                        return self.poll_after_crossterm_restart(cx);
                     }
                     Poll::Pending => {
                         drop(state);
@@ -219,6 +227,26 @@ impl<S: EventSource + Default + Unpin> TuiEventStream<S> {
                 return Poll::Ready(Some(mapped));
             }
         }
+    }
+
+    fn poll_after_crossterm_restart(&mut self, cx: &mut Context<'_>) -> Poll<Option<TuiEvent>> {
+        let now = Instant::now();
+        let should_warn = self
+            .last_crossterm_warn_at
+            .is_none_or(|last| now.duration_since(last) > Duration::from_secs(30));
+        if should_warn {
+            self.last_crossterm_warn_at = Some(now);
+            tracing::warn!("crossterm event stream ended; restarting");
+        }
+        let should_emit = self
+            .last_crossterm_restart_at
+            .is_none_or(|last| now.duration_since(last) > Duration::from_millis(250));
+        if should_emit {
+            self.last_crossterm_restart_at = Some(now);
+            return Poll::Ready(Some(TuiEvent::Draw));
+        }
+        cx.waker().wake_by_ref();
+        Poll::Pending
     }
 
     /// Poll the draw broadcast stream for the next draw event. Draw events are used to trigger a redraw of the TUI.
@@ -298,6 +326,7 @@ mod tests {
     use crossterm::event::KeyEvent;
     use crossterm::event::KeyModifiers;
     use pretty_assertions::assert_eq;
+    use std::io;
     use std::task::Context;
     use std::task::Poll;
     use std::time::Duration;
@@ -452,14 +481,23 @@ mod tests {
     }
 
     #[tokio::test(flavor = "current_thread")]
-    async fn error_or_eof_ends_stream() {
+    async fn error_or_eof_restarts_stream() {
         let (broker, handle, _draw_tx, draw_rx, terminal_focused) = setup();
         let mut stream = make_stream(broker, draw_rx, terminal_focused);
 
-        handle.send(Err(std::io::Error::other("boom")));
+        handle.send(Err(io::Error::other("boom")));
 
-        let next = stream.next().await;
-        assert!(next.is_none());
+        let first = stream.next().await.unwrap();
+        assert!(matches!(first, TuiEvent::Draw));
+
+        let expected_key = KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE);
+        handle.send(Ok(Event::Key(expected_key)));
+
+        let second = stream.next().await.unwrap();
+        match second {
+            TuiEvent::Key(key) => assert_eq!(key, expected_key),
+            other => panic!("expected key event, got {other:?}"),
+        }
     }
 
     #[tokio::test(flavor = "current_thread")]
