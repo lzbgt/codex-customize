@@ -81,20 +81,19 @@ impl SuspendContext {
     /// resumes; returns `None` when there was no pending suspend intent.
     pub(crate) fn prepare_resume_action(
         &self,
-        terminal: &mut Terminal,
+        cursor_pos: Option<Position>,
+        last_known_cursor_pos: Position,
         alt_saved_viewport: &mut Option<Rect>,
     ) -> Option<PreparedResumeAction> {
         let action = self.take_resume_action()?;
         match action {
             ResumeAction::RealignInline => {
-                let cursor_pos = terminal
-                    .get_cursor_position()
-                    .unwrap_or(terminal.last_known_cursor_pos);
+                let cursor_pos = cursor_pos.unwrap_or(last_known_cursor_pos);
                 let viewport = Rect::new(0, cursor_pos.y, 0, 0);
                 Some(PreparedResumeAction::RealignViewport(viewport))
             }
             ResumeAction::RestoreAlt => {
-                if let Ok(Position { y, .. }) = terminal.get_cursor_position()
+                if let Some(Position { y, .. }) = cursor_pos
                     && let Some(saved) = alt_saved_viewport.as_mut()
                 {
                     saved.y = y;

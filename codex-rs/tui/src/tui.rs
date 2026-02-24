@@ -463,9 +463,18 @@ impl Tui {
         // If we are resuming from ^Z, we need to prepare the resume action now so we can apply it
         // in the synchronized update.
         #[cfg(unix)]
-        let mut prepared_resume = self
-            .suspend_context
-            .prepare_resume_action(&mut self.terminal, &mut self.alt_saved_viewport);
+        let mut prepared_resume = {
+            let resume_cursor_pos = if self.event_broker.is_paused() {
+                self.terminal.get_cursor_position().ok()
+            } else {
+                None
+            };
+            self.suspend_context.prepare_resume_action(
+                resume_cursor_pos,
+                self.terminal.last_known_cursor_pos,
+                &mut self.alt_saved_viewport,
+            )
+        };
 
         // Precompute any viewport updates that need a cursor-position query before entering
         // the synchronized update, to avoid racing with the event reader.
