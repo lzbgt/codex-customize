@@ -143,7 +143,7 @@ pub(crate) enum ResumeAction {
 /// Describes the viewport change to apply when resuming from suspend during the synchronized draw.
 ///
 /// Either restore the alt screen (with viewport reset) or realign the inline viewport.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum PreparedResumeAction {
     /// Re-enter the alt screen and reset the viewport to the terminal dimensions.
     RestoreAltScreen,
@@ -178,4 +178,45 @@ fn suspend_process() -> Result<()> {
     // After the process resumes, reapply terminal modes so drawing can continue.
     super::set_modes()?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn prepare_resume_action_realign_falls_back_to_last_known_cursor() {
+        let context = SuspendContext::new();
+        context.set_resume_action(ResumeAction::RealignInline);
+
+        let mut alt_saved_viewport = None;
+        let result =
+            context.prepare_resume_action(None, Position { x: 3, y: 9 }, &mut alt_saved_viewport);
+
+        assert_eq!(
+            result,
+            Some(PreparedResumeAction::RealignViewport(Rect::new(0, 9, 0, 0)))
+        );
+        assert_eq!(
+            context.prepare_resume_action(None, Position { x: 0, y: 0 }, &mut None),
+            None
+        );
+    }
+
+    #[test]
+    fn prepare_resume_action_restore_alt_updates_saved_viewport() {
+        let context = SuspendContext::new();
+        context.set_resume_action(ResumeAction::RestoreAlt);
+
+        let mut alt_saved_viewport = Some(Rect::new(0, 2, 10, 4));
+        let result = context.prepare_resume_action(
+            Some(Position { x: 1, y: 7 }),
+            Position { x: 0, y: 0 },
+            &mut alt_saved_viewport,
+        );
+
+        assert_eq!(result, Some(PreparedResumeAction::RestoreAltScreen));
+        assert_eq!(alt_saved_viewport.unwrap().y, 7);
+    }
 }
