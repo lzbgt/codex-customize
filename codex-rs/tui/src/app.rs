@@ -853,8 +853,12 @@ impl App {
                 .last_watchdog_recovery_at
                 .is_none_or(|last| last.elapsed() > Duration::from_secs(30));
             if should_recover {
+                let stats = tui.drain_event_stats();
                 tracing::warn!(
                     elapsed_ms = elapsed.as_millis(),
+                    lock_contended = stats.lock_contended,
+                    poll_in_flight = stats.poll_in_flight,
+                    restarts = stats.restarts,
                     "ui watchdog restarting event stream after prolonged idle"
                 );
                 self.last_watchdog_recovery_at = Some(Instant::now());

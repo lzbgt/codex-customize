@@ -22,6 +22,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::TryLockError;
 use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::task::Context;
 use std::task::Poll;
@@ -54,6 +55,7 @@ pub trait EventSource: Send + 'static {
 pub struct EventBroker<S: EventSource = CrosstermEventSource> {
     state: Mutex<EventBrokerState<S>>,
     resume_events_tx: watch::Sender<()>,
+    stats: EventBrokerStats,
 }
 
 /// Tracks state of underlying [`EventSource`].
@@ -100,6 +102,7 @@ impl<S: EventSource + Default> EventBroker<S> {
         Self {
             state: Mutex::new(EventBrokerState::Start),
             resume_events_tx,
+            stats: EventBrokerStats::default(),
         }
     }
 
@@ -128,6 +131,10 @@ impl<S: EventSource + Default> EventBroker<S> {
     /// underlying crossterm stream to be recreated.
     pub fn resume_events_rx(&self) -> watch::Receiver<()> {
         self.resume_events_tx.subscribe()
+    }
+
+    pub fn drain_stats(&self) -> EventBrokerStatsSnapshot {
+        self.stats.snapshot_and_reset()
     }
 }
 
@@ -217,6 +224,10 @@ impl<S: EventSource + Default + Unpin> TuiEventStream<S> {
                     Ok(guard) => guard,
                     Err(TryLockError::Poisoned(guard)) => guard.into_inner(),
                     Err(TryLockError::WouldBlock) => {
+                        self.broker
+                            .stats
+                            .lock_contended
+                            .fetch_add(1, Ordering::Relaxed);
                         cx.waker().wake_by_ref();
                         return Poll::Pending;
                     }
@@ -234,6 +245,10 @@ impl<S: EventSource + Default + Unpin> TuiEventStream<S> {
                     }
                 };
                 if event_state.polling {
+                    self.broker
+                        .stats
+                        .poll_in_flight
+                        .fetch_add(1, Ordering::Relaxed);
                     drop(state);
                     cx.waker().wake_by_ref();
                     return Poll::Pending;
@@ -271,6 +286,7 @@ impl<S: EventSource + Default + Unpin> TuiEventStream<S> {
                     }
                 }
                 if should_restart {
+                    self.broker.stats.restarts.fetch_add(1, Ordering::Relaxed);
                     *state = EventBrokerState::Start;
                     drop(events);
                     drop(state);
@@ -639,6 +655,29 @@ mod tests {
         match event {
             Some(TuiEvent::Key(key)) => assert_eq!(key, expected_key),
             other => panic!("expected key event, got {other:?}"),
+        }
+    }
+}
+#[derive(Default)]
+struct EventBrokerStats {
+    lock_contended: AtomicU64,
+    poll_in_flight: AtomicU64,
+    restarts: AtomicU64,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct EventBrokerStatsSnapshot {
+    pub lock_contended: u64,
+    pub poll_in_flight: u64,
+    pub restarts: u64,
+}
+
+impl EventBrokerStats {
+    fn snapshot_and_reset(&self) -> EventBrokerStatsSnapshot {
+        EventBrokerStatsSnapshot {
+            lock_contended: self.lock_contended.swap(0, Ordering::Relaxed),
+            poll_in_flight: self.poll_in_flight.swap(0, Ordering::Relaxed),
+            restarts: self.restarts.swap(0, Ordering::Relaxed),
         }
     }
 }

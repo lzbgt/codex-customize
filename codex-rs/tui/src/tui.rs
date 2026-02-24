@@ -42,6 +42,7 @@ use crate::notifications::DesktopNotificationBackend;
 use crate::notifications::NotificationBackendKind;
 use crate::notifications::detect_backend;
 use crate::tui::event_stream::EventBroker;
+use crate::tui::event_stream::EventBrokerStatsSnapshot;
 use crate::tui::event_stream::TuiEventStream;
 #[cfg(unix)]
 use crate::tui::job_control::SuspendContext;
@@ -306,6 +307,10 @@ impl Tui {
     // Inverse of `pause_events`.
     pub fn resume_events(&mut self) {
         self.event_broker.resume_events();
+    }
+
+    pub fn drain_event_stats(&self) -> EventBrokerStatsSnapshot {
+        self.event_broker.drain_stats()
     }
 
     /// Temporarily restore terminal state to run an external interactive program `f`.
