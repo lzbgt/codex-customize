@@ -12,6 +12,8 @@
 //! [“Actors with Tokio”](https://ryhl.io/blog/actors-with-tokio/), with a
 //! dedicated scheduler task and lightweight request handles.
 
+use std::sync::Arc;
+use std::sync::Mutex;
 use std::time::Duration;
 use std::time::Instant;
 
@@ -29,7 +31,7 @@ use super::frame_rate_limiter::FrameRateLimiter;
 /// from anywhere in the TUI code.
 #[derive(Clone, Debug)]
 pub struct FrameRequester {
-    frame_schedule_tx: mpsc::UnboundedSender<Instant>,
+    inner: Arc<FrameRequesterInner>,
 }
 
 impl FrameRequester {
@@ -38,21 +40,21 @@ impl FrameRequester {
     /// The provided `draw_tx` is used to notify the TUI event loop of scheduled draws.
     pub fn new(draw_tx: broadcast::Sender<()>) -> Self {
         let (tx, rx) = mpsc::unbounded_channel();
-        let scheduler = FrameScheduler::new(rx, draw_tx);
+        let scheduler = FrameScheduler::new(rx, draw_tx.clone());
         tokio::spawn(scheduler.run());
         Self {
-            frame_schedule_tx: tx,
+            inner: Arc::new(FrameRequesterInner::new(draw_tx, tx, true)),
         }
     }
 
     /// Schedule a frame draw as soon as possible.
     pub fn schedule_frame(&self) {
-        let _ = self.frame_schedule_tx.send(Instant::now());
+        self.inner.send_deadline(Instant::now());
     }
 
     /// Schedule a frame draw to occur after the specified duration.
     pub fn schedule_frame_in(&self, dur: Duration) {
-        let _ = self.frame_schedule_tx.send(Instant::now() + dur);
+        self.inner.send_deadline(Instant::now() + dur);
     }
 }
 
@@ -60,10 +62,51 @@ impl FrameRequester {
 impl FrameRequester {
     /// Create a no-op frame requester for tests.
     pub(crate) fn test_dummy() -> Self {
+        let (draw_tx, _draw_rx) = broadcast::channel(1);
         let (tx, _rx) = mpsc::unbounded_channel();
         FrameRequester {
-            frame_schedule_tx: tx,
+            inner: Arc::new(FrameRequesterInner::new(draw_tx, tx, false)),
         }
+    }
+}
+
+#[derive(Debug)]
+struct FrameRequesterInner {
+    draw_tx: broadcast::Sender<()>,
+    frame_schedule_tx: Mutex<mpsc::UnboundedSender<Instant>>,
+    allow_respawn: bool,
+}
+
+impl FrameRequesterInner {
+    fn new(
+        draw_tx: broadcast::Sender<()>,
+        frame_schedule_tx: mpsc::UnboundedSender<Instant>,
+        allow_respawn: bool,
+    ) -> Self {
+        Self {
+            draw_tx,
+            frame_schedule_tx: Mutex::new(frame_schedule_tx),
+            allow_respawn,
+        }
+    }
+
+    fn send_deadline(&self, deadline: Instant) {
+        let mut sender = self
+            .frame_schedule_tx
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if sender.send(deadline).is_ok() {
+            return;
+        }
+        if !self.allow_respawn {
+            return;
+        }
+        tracing::warn!("frame scheduler channel closed; restarting");
+        let (new_tx, rx) = mpsc::unbounded_channel();
+        let scheduler = FrameScheduler::new(rx, self.draw_tx.clone());
+        tokio::spawn(scheduler.run());
+        *sender = new_tx;
+        let _ = sender.send(deadline);
     }
 }
 

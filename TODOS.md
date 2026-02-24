@@ -32,4 +32,5 @@ This file tracks high-impact work items for this repo. Ordering is by priority (
 - Improved error handling so `--auto-continue` can enqueue on turn-ending `EventMsg::Error` (only when a turn is actually running).
 - Made tool output fully visible by default (new `tui.show_full_tool_output`, no transcript ellipses for exec/MCP/patch failure output).
 - Restarted the TUI event stream after crossterm EOF/error, emitting a redraw and adding a regression test.
+- Added frame scheduler auto-respawn when the draw queue closes to prevent TUI redraw stalls.
 - Built, codesigned, and installed macOS `codex` + `apply_patch` (Homebrew prefix), and produced versioned Linux x64 + Windows x64 zip artifacts in `dist/`.
