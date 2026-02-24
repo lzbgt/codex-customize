@@ -657,6 +657,32 @@ mod tests {
             other => panic!("expected key event, got {other:?}"),
         }
     }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn lock_contention_increments_stats() {
+        let (broker, handle, _draw_tx, draw_rx, terminal_focused) = setup();
+        let mut stream = make_stream(broker.clone(), draw_rx, terminal_focused);
+
+        let guard = broker.state.lock().unwrap();
+        let task = tokio::spawn(async move { stream.next().await });
+        tokio::task::yield_now().await;
+        drop(guard);
+
+        let expected_key = KeyEvent::new(KeyCode::Char('l'), KeyModifiers::NONE);
+        handle.send(Ok(Event::Key(expected_key)));
+
+        let event = timeout(Duration::from_millis(100), task)
+            .await
+            .expect("timed out waiting for event")
+            .expect("join failed");
+        match event {
+            Some(TuiEvent::Key(key)) => assert_eq!(key, expected_key),
+            other => panic!("expected key event, got {other:?}"),
+        }
+
+        let stats = broker.drain_stats();
+        assert!(stats.lock_contended > 0);
+    }
 }
 #[derive(Default)]
 struct EventBrokerStats {
