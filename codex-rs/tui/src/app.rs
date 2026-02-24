@@ -1317,7 +1317,9 @@ impl App {
                         app.handle_tui_event(tui, event).await?
                     } else {
                         tracing::warn!("tui event stream ended; recreating");
+                        tui.resume_events();
                         tui_events = tui.event_stream();
+                        tui.frame_requester().schedule_frame();
                         AppRunControl::Continue
                     }
                 }
