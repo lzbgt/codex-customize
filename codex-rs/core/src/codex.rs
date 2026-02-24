@@ -1242,7 +1242,7 @@ impl Session {
         }
         // Persist the event into rollout (recorder filters as needed)
         let rollout_items = vec![RolloutItem::EventMsg(event.msg.clone())];
-        self.persist_rollout_items(&rollout_items).await;
+        self.persist_rollout_items_nonblocking(&rollout_items);
         if let Err(e) = self.tx_event.send(event).await {
             debug!("dropping event because channel is closed: {e}");
         }
@@ -1662,6 +1662,28 @@ impl Session {
             && let Err(e) = rec.record_items(items).await
         {
             error!("failed to record rollout items: {e:#}");
+        }
+    }
+
+    pub(crate) fn persist_rollout_items_nonblocking(&self, items: &[RolloutItem]) {
+        let recorder = match self.services.rollout.try_lock() {
+            Ok(guard) => guard.clone(),
+            Err(_) => {
+                debug!("rollout recorder busy; skipping {} items", items.len());
+                return;
+            }
+        };
+        let Some(rec) = recorder else {
+            return;
+        };
+        match rec.try_record_items(items) {
+            Ok(true) => {}
+            Ok(false) => {
+                debug!("rollout queue full; dropping {} items", items.len());
+            }
+            Err(e) => {
+                error!("failed to record rollout items: {e:#}");
+            }
         }
     }
 

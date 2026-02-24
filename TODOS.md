@@ -34,4 +34,5 @@ This file tracks high-impact work items for this repo. Ordering is by priority (
 - Restarted the TUI event stream after crossterm EOF/error, emitting a redraw and adding a regression test.
 - Added frame scheduler auto-respawn when the draw queue closes to prevent TUI redraw stalls.
 - Recreate the TUI event stream if it ends unexpectedly, resuming the broker and scheduling a redraw.
+- Make rollout persistence nonblocking for live event delivery to avoid UI stalls when the writer is backpressured.
 - Built, codesigned, and installed macOS `codex` + `apply_patch` (Homebrew prefix), and produced versioned Linux x64 + Windows x64 zip artifacts in `dist/`.

@@ -14,6 +14,7 @@ use time::format_description::FormatItem;
 use time::macros::format_description;
 use tokio::io::AsyncWriteExt;
 use tokio::sync::mpsc::Sender;
+use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::mpsc::{self};
 use tokio::sync::oneshot;
 use tracing::info;
@@ -268,6 +269,25 @@ impl RolloutRecorder {
             .send(RolloutCmd::AddItems(filtered))
             .await
             .map_err(|e| IoError::other(format!("failed to queue rollout items: {e}")))
+    }
+
+    pub(crate) fn try_record_items(&self, items: &[RolloutItem]) -> std::io::Result<bool> {
+        let mut filtered = Vec::new();
+        for item in items {
+            if is_persisted_response_item(item) {
+                filtered.push(item.clone());
+            }
+        }
+        if filtered.is_empty() {
+            return Ok(true);
+        }
+        match self.tx.try_send(RolloutCmd::AddItems(filtered)) {
+            Ok(()) => Ok(true),
+            Err(TrySendError::Full(_)) => Ok(false),
+            Err(TrySendError::Closed(_)) => Err(IoError::other(
+                "failed to queue rollout items: channel closed",
+            )),
+        }
     }
 
     /// Flush all queued writes and wait until they are committed by the writer task.
