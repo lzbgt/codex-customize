@@ -539,6 +539,7 @@ pub(crate) struct App {
 
     auto_continue: AutoContinueState,
     last_draw_at: Instant,
+    last_watchdog_recovery_at: Option<Instant>,
 }
 
 #[derive(Default)]
@@ -846,6 +847,21 @@ impl App {
                 "ui watchdog scheduling redraw after idle"
             );
             tui.frame_requester().schedule_frame();
+        }
+        if elapsed > Duration::from_secs(10) {
+            let should_recover = self
+                .last_watchdog_recovery_at
+                .is_none_or(|last| last.elapsed() > Duration::from_secs(30));
+            if should_recover {
+                tracing::warn!(
+                    elapsed_ms = elapsed.as_millis(),
+                    "ui watchdog restarting event stream after prolonged idle"
+                );
+                self.last_watchdog_recovery_at = Some(Instant::now());
+                tui.pause_events();
+                tui.resume_events();
+                tui.frame_requester().schedule_frame();
+            }
         }
     }
 
@@ -1238,6 +1254,7 @@ impl App {
             pending_primary_events: VecDeque::new(),
             auto_continue: AutoContinueState::new(auto_continue, auto_continue_max_turns),
             last_draw_at: Instant::now(),
+            last_watchdog_recovery_at: None,
         };
 
         // On startup, if Agent mode (workspace-write) or ReadOnly is active, warn about world-writable dirs on Windows.
@@ -2657,6 +2674,7 @@ mod tests {
             pending_primary_events: VecDeque::new(),
             auto_continue: AutoContinueState::default(),
             last_draw_at: Instant::now(),
+            last_watchdog_recovery_at: None,
         }
     }
 
@@ -2707,6 +2725,7 @@ mod tests {
                 pending_primary_events: VecDeque::new(),
                 auto_continue: AutoContinueState::default(),
                 last_draw_at: Instant::now(),
+                last_watchdog_recovery_at: None,
             },
             rx,
             op_rx,
