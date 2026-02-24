@@ -116,6 +116,17 @@ impl<S: EventSource + Default> EventBroker<S> {
     }
 }
 
+impl<S: EventSource> EventBroker<S> {
+    /// Returns true if the underlying event source is paused.
+    pub fn is_paused(&self) -> bool {
+        let state = self
+            .state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        matches!(&*state, EventBrokerState::Paused)
+    }
+}
+
 /// Real crossterm-backed event source.
 pub struct CrosstermEventSource(pub crossterm::event::EventStream);
 

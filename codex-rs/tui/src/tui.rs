@@ -533,6 +533,7 @@ impl Tui {
         let screen_size = terminal.size()?;
         let last_known_screen_size = terminal.last_known_screen_size;
         if screen_size != last_known_screen_size
+            && self.event_broker.is_paused()
             && let Ok(cursor_pos) = terminal.get_cursor_position()
         {
             let last_known_cursor_pos = terminal.last_known_cursor_pos;
