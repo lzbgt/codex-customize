@@ -538,6 +538,7 @@ pub(crate) struct App {
     pending_primary_events: VecDeque<Event>,
 
     auto_continue: AutoContinueState,
+    last_draw_at: Instant,
 }
 
 #[derive(Default)]
@@ -829,6 +830,15 @@ impl App {
             self.set_thread_active(active_id, false).await;
         }
         self.active_thread_rx = None;
+    }
+
+    fn handle_ui_watchdog(&mut self, tui: &mut tui::Tui) {
+        if !self.chat_widget.is_task_running() && !self.chat_widget.is_streaming() {
+            return;
+        }
+        if self.last_draw_at.elapsed() > Duration::from_secs(2) {
+            tui.frame_requester().schedule_frame();
+        }
     }
 
     async fn enqueue_thread_event(
@@ -1219,6 +1229,7 @@ impl App {
             primary_session_configured: None,
             pending_primary_events: VecDeque::new(),
             auto_continue: AutoContinueState::new(auto_continue, auto_continue_max_turns),
+            last_draw_at: Instant::now(),
         };
 
         // On startup, if Agent mode (workspace-write) or ReadOnly is active, warn about world-writable dirs on Windows.
@@ -1273,6 +1284,7 @@ impl App {
 
         let mut thread_created_rx = thread_manager.subscribe_thread_created();
         let mut listen_for_threads = true;
+        let mut ui_watchdog = tokio::time::interval(Duration::from_secs(2));
 
         let exit_reason = loop {
             let control = select! {
@@ -1311,6 +1323,10 @@ impl App {
                     }
                     AppRunControl::Continue
                 }
+                _ = ui_watchdog.tick() => {
+                    app.handle_ui_watchdog(tui);
+                    AppRunControl::Continue
+                }
             };
             match control {
                 AppRunControl::Continue => {}
@@ -1347,6 +1363,7 @@ impl App {
                     self.chat_widget.handle_paste(pasted);
                 }
                 TuiEvent::Draw => {
+                    self.last_draw_at = Instant::now();
                     if self.backtrack_render_pending {
                         self.backtrack_render_pending = false;
                         self.render_transcript_once(tui);
@@ -2624,6 +2641,7 @@ mod tests {
             primary_session_configured: None,
             pending_primary_events: VecDeque::new(),
             auto_continue: AutoContinueState::default(),
+            last_draw_at: Instant::now(),
         }
     }
 
@@ -2673,6 +2691,7 @@ mod tests {
                 primary_session_configured: None,
                 pending_primary_events: VecDeque::new(),
                 auto_continue: AutoContinueState::default(),
+                last_draw_at: Instant::now(),
             },
             rx,
             op_rx,

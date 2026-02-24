@@ -2514,6 +2514,14 @@ impl ChatWidget {
         self.external_editor_state
     }
 
+    pub(crate) fn is_task_running(&self) -> bool {
+        self.bottom_pane.is_task_running()
+    }
+
+    pub(crate) fn is_streaming(&self) -> bool {
+        self.stream_controller.is_some()
+    }
+
     pub(crate) fn set_external_editor_state(&mut self, state: ExternalEditorState) {
         self.external_editor_state = state;
     }
