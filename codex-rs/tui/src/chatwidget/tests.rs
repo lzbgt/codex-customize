@@ -875,6 +875,17 @@ fn next_submit_op(op_rx: &mut tokio::sync::mpsc::UnboundedReceiver<Op>) -> Op {
     }
 }
 
+fn assert_no_submit_op(op_rx: &mut tokio::sync::mpsc::UnboundedReceiver<Op>) {
+    loop {
+        match op_rx.try_recv() {
+            Ok(Op::UserTurn { .. }) => panic!("unexpected submit op while stream is active"),
+            Ok(_) => continue,
+            Err(TryRecvError::Empty) => break,
+            Err(TryRecvError::Disconnected) => panic!("submit op channel closed unexpectedly"),
+        }
+    }
+}
+
 fn set_chatgpt_auth(chat: &mut ChatWidget) {
     chat.auth_manager =
         AuthManager::from_auth_for_testing(CodexAuth::create_dummy_chatgpt_auth_for_testing());
@@ -1771,6 +1782,89 @@ async fn streaming_final_answer_keeps_task_running_state() {
         other => panic!("expected Op::Interrupt, got {other:?}"),
     }
     assert!(!chat.bottom_pane.quit_shortcut_hint_visible());
+}
+
+#[tokio::test]
+async fn steer_enter_queues_while_final_answer_stream_is_active() {
+    let (mut chat, _rx, mut op_rx) = make_chatwidget_manual(None).await;
+    chat.thread_id = Some(ThreadId::new());
+    chat.on_task_started();
+    // Keep the assistant stream open (no commit tick/finalize) to model the repro window:
+    // user presses Enter while the final answer is still streaming.
+    chat.on_agent_message_delta("Final answer line\n".to_string(), false);
+
+    chat.bottom_pane.set_composer_text(
+        "queued while streaming".to_string(),
+        Vec::new(),
+        Vec::new(),
+    );
+    chat.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+    assert_eq!(chat.queued_user_messages.len(), 1);
+    assert_eq!(
+        chat.queued_user_messages.front().unwrap().text,
+        "queued while streaming"
+    );
+    assert_no_submit_op(&mut op_rx);
+
+    // Once final output ends, the queued input must be submitted automatically.
+    chat.on_task_complete(None, false);
+
+    assert!(chat.queued_user_messages.is_empty());
+    match next_submit_op(&mut op_rx) {
+        Op::UserTurn { .. } => {}
+        other => panic!("expected Op::UserTurn after stream completion, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn steer_enter_during_final_stream_preserves_follow_up_prompts_in_order() {
+    let (mut chat, _rx, mut op_rx) = make_chatwidget_manual(None).await;
+    chat.thread_id = Some(ThreadId::new());
+    chat.on_task_started();
+    // Simulate "dead mode" repro timing by keeping a final-answer stream active while the
+    // user submits multiple follow-up prompts.
+    chat.on_agent_message_delta("Final answer line\n".to_string(), false);
+
+    chat.bottom_pane
+        .set_composer_text("first follow-up".to_string(), Vec::new(), Vec::new());
+    chat.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    chat.bottom_pane
+        .set_composer_text("second follow-up".to_string(), Vec::new(), Vec::new());
+    chat.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+    assert_eq!(chat.queued_user_messages.len(), 2);
+    assert_eq!(
+        chat.queued_user_messages.front().unwrap().text,
+        "first follow-up"
+    );
+    assert_eq!(
+        chat.queued_user_messages.back().unwrap().text,
+        "second follow-up"
+    );
+    assert_no_submit_op(&mut op_rx);
+
+    // Completion must recover by submitting queued prompts in-order.
+    chat.on_task_complete(None, false);
+
+    let first_items = match next_submit_op(&mut op_rx) {
+        Op::UserTurn { items, .. } => items,
+        other => panic!("expected Op::UserTurn, got {other:?}"),
+    };
+    assert_eq!(
+        first_items,
+        vec![
+            UserInput::Text {
+                text: "first follow-up".to_string(),
+                text_elements: Vec::new(),
+            },
+            UserInput::Text {
+                text: "second follow-up".to_string(),
+                text_elements: Vec::new(),
+            },
+        ]
+    );
+    assert!(chat.queued_user_messages.is_empty());
 }
 
 #[tokio::test]

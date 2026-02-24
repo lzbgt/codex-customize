@@ -4,6 +4,10 @@ This file tracks high-impact work items for this repo. Ordering is by priority (
 
 ## P0
 
+- Investigate remaining TUI hangs in long-running sessions:
+  - Capture symbolicated stacks from a debug build (`lldb` or `sample` on the debug binary).
+  - Identify the blocking await/condvar and add watchdog metrics/logging around event queues.
+  - Add a regression test or targeted fuzz case once the root cause is confirmed.
 - Verify `--auto-continue` behavior in real sessions on the latest upstream base:
   - No-marker turn-end still triggers the follow-up prompt.
   - `AUTO_MODE_NEXT=stop` pauses auto-continue for that boundary only (next manual turn resumes).

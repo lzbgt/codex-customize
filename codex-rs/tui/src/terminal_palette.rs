@@ -35,7 +35,6 @@ pub fn best_color(target: (u8, u8, u8)) -> Color {
 
 pub fn requery_default_colors() {
     imp::requery_default_colors();
-    bump_palette_version();
 }
 
 #[derive(Clone, Copy)]
@@ -72,6 +71,8 @@ mod imp {
     use crossterm::style::query_foreground_color;
     use std::sync::Mutex;
     use std::sync::OnceLock;
+    use std::sync::atomic::AtomicBool;
+    use std::sync::atomic::Ordering;
 
     struct Cache<T> {
         attempted: bool,
@@ -95,12 +96,6 @@ mod imp {
             }
             self.value
         }
-
-        fn refresh_with(&mut self, mut init: impl FnMut() -> Option<T>) -> Option<T> {
-            self.value = init();
-            self.attempted = true;
-            self.value
-        }
     }
 
     fn default_colors_cache() -> &'static Mutex<Cache<DefaultColors>> {
@@ -115,13 +110,37 @@ mod imp {
     }
 
     pub(super) fn requery_default_colors() {
-        if let Ok(mut cache) = default_colors_cache().lock() {
-            // Don't try to refresh if the cache is already attempted and failed.
-            if cache.attempted && cache.value.is_none() {
+        static REFRESH_IN_FLIGHT: AtomicBool = AtomicBool::new(false);
+        if REFRESH_IN_FLIGHT
+            .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+            .is_err()
+        {
+            return;
+        }
+
+        std::thread::spawn(|| {
+            let should_attempt = match default_colors_cache().lock() {
+                Ok(cache) => !(cache.attempted && cache.value.is_none()),
+                Err(_) => {
+                    REFRESH_IN_FLIGHT.store(false, Ordering::Release);
+                    return;
+                }
+            };
+            if !should_attempt {
+                REFRESH_IN_FLIGHT.store(false, Ordering::Release);
                 return;
             }
-            cache.refresh_with(|| query_default_colors().unwrap_or_default());
-        }
+
+            let result = query_default_colors().unwrap_or_default();
+            if let Ok(mut cache) = default_colors_cache().lock() {
+                cache.value = result;
+                cache.attempted = true;
+            }
+            if result.is_some() {
+                super::bump_palette_version();
+            }
+            REFRESH_IN_FLIGHT.store(false, Ordering::Release);
+        });
     }
 
     fn query_default_colors() -> std::io::Result<Option<DefaultColors>> {

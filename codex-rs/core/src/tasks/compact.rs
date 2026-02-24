@@ -22,7 +22,7 @@ impl SessionTask for CompactTask {
         session: Arc<SessionTaskContext>,
         ctx: Arc<TurnContext>,
         input: Vec<UserInput>,
-        _cancellation_token: CancellationToken,
+        cancellation_token: CancellationToken,
     ) -> Option<String> {
         let session = session.clone_session();
         if crate::compact::should_use_remote_compact_task(
@@ -34,14 +34,14 @@ impl SessionTask for CompactTask {
                 1,
                 &[("type", "remote")],
             );
-            crate::compact_remote::run_remote_compact_task(session, ctx).await
+            crate::compact_remote::run_remote_compact_task(session, ctx, cancellation_token).await
         } else {
             let _ = session.services.otel_manager.counter(
                 "codex.task.compact",
                 1,
                 &[("type", "local")],
             );
-            crate::compact::run_compact_task(session, ctx, input).await
+            crate::compact::run_compact_task(session, ctx, input, cancellation_token).await
         }
 
         None

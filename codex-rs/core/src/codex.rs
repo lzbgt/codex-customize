@@ -2882,7 +2882,7 @@ pub(crate) async fn run_turn(
     let auto_compact_limit = model_info.auto_compact_token_limit().unwrap_or(i64::MAX);
     let total_usage_tokens = sess.get_total_token_usage().await;
     if total_usage_tokens >= auto_compact_limit {
-        run_auto_compact(&sess, &turn_context).await;
+        run_auto_compact(&sess, &turn_context, cancellation_token.child_token()).await;
     }
     let event = EventMsg::TurnStarted(TurnStartedEvent {
         model_context_window: turn_context.client.get_model_context_window(),
@@ -2972,7 +2972,7 @@ pub(crate) async fn run_turn(
 
                 // as long as compaction works well in getting us way below the token limit, we shouldn't worry about being in an infinite loop.
                 if token_limit_reached && needs_follow_up {
-                    run_auto_compact(&sess, &turn_context).await;
+                    run_auto_compact(&sess, &turn_context, cancellation_token.child_token()).await;
                     continue;
                 }
 
@@ -3023,11 +3023,25 @@ pub(crate) async fn run_turn(
     last_agent_message
 }
 
-async fn run_auto_compact(sess: &Arc<Session>, turn_context: &Arc<TurnContext>) {
+async fn run_auto_compact(
+    sess: &Arc<Session>,
+    turn_context: &Arc<TurnContext>,
+    cancellation_token: CancellationToken,
+) {
     if should_use_remote_compact_task(sess.as_ref(), &turn_context.client.get_provider()) {
-        run_inline_remote_auto_compact_task(Arc::clone(sess), Arc::clone(turn_context)).await;
+        run_inline_remote_auto_compact_task(
+            Arc::clone(sess),
+            Arc::clone(turn_context),
+            cancellation_token,
+        )
+        .await;
     } else {
-        run_inline_auto_compact_task(Arc::clone(sess), Arc::clone(turn_context)).await;
+        run_inline_auto_compact_task(
+            Arc::clone(sess),
+            Arc::clone(turn_context),
+            cancellation_token,
+        )
+        .await;
     }
 }
 
@@ -3222,8 +3236,41 @@ async fn drain_in_flight(
     in_flight: &mut FuturesOrdered<BoxFuture<'static, CodexResult<ResponseInputItem>>>,
     sess: Arc<Session>,
     turn_context: Arc<TurnContext>,
+    cancellation_token: CancellationToken,
 ) -> CodexResult<()> {
-    while let Some(res) = in_flight.next().await {
+    let idle_timeout = turn_context.client.get_provider().stream_idle_timeout();
+    let abort_timeout = std::time::Duration::from_secs(2);
+    let mut cancelled = cancellation_token.is_cancelled();
+    loop {
+        let timeout = if cancelled {
+            abort_timeout
+        } else {
+            idle_timeout
+        };
+        let res = tokio::select! {
+            _ = cancellation_token.cancelled(), if !cancelled => {
+                cancelled = true;
+                continue;
+            }
+            res = tokio::time::timeout(timeout, in_flight.next()) => res,
+        };
+
+        let res = match res {
+            Ok(res) => res,
+            Err(_) => {
+                if cancelled {
+                    return Err(CodexErr::TurnAborted);
+                }
+                let idle_secs = idle_timeout.as_secs_f64();
+                return Err(CodexErr::Fatal(format!(
+                    "Timed out waiting for tool results ({idle_secs:.1}s)"
+                )));
+            }
+        };
+
+        let Some(res) = res else {
+            break;
+        };
         match res {
             Ok(response_input) => {
                 sess.record_conversation_items(&turn_context, &[response_input.into()])
@@ -3233,6 +3280,7 @@ async fn drain_in_flight(
                 error_or_panic(format!("in-flight tool future failed during drain: {err}"));
             }
         }
+        cancelled |= cancellation_token.is_cancelled();
     }
     Ok(())
 }
@@ -3464,7 +3512,13 @@ async fn try_run_sampling_request(
         }
     };
 
-    drain_in_flight(&mut in_flight, sess.clone(), turn_context.clone()).await?;
+    drain_in_flight(
+        &mut in_flight,
+        sess.clone(),
+        turn_context.clone(),
+        cancellation_token.clone(),
+    )
+    .await?;
 
     if should_emit_turn_diff {
         let unified_diff = {

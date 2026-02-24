@@ -2458,7 +2458,9 @@ impl ChatWidget {
                             .take_recent_submission_images_with_placeholders(),
                         text_elements,
                     };
-                    if self.is_session_configured() {
+                    let should_submit_now =
+                        self.is_session_configured() && self.stream_controller.is_none();
+                    if should_submit_now {
                         // Submitted is only emitted when steer is enabled (Enter sends immediately).
                         // Reset any reasoning header only when we are actually submitting a turn.
                         self.reasoning_buffer.clear();

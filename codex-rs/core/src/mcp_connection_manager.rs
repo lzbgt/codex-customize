@@ -164,6 +164,39 @@ struct ElicitationRequestManager {
     requests: Arc<Mutex<ResponderMap>>,
 }
 
+struct ElicitationRequestCleanup {
+    requests: Arc<Mutex<ResponderMap>>,
+    key: Option<(String, RequestId)>,
+}
+
+impl ElicitationRequestCleanup {
+    fn new(requests: Arc<Mutex<ResponderMap>>, key: (String, RequestId)) -> Self {
+        Self {
+            requests,
+            key: Some(key),
+        }
+    }
+
+    fn disarm(&mut self) {
+        self.key = None;
+    }
+}
+
+impl Drop for ElicitationRequestCleanup {
+    fn drop(&mut self) {
+        let Some(key) = self.key.take() else {
+            return;
+        };
+        let requests = self.requests.clone();
+        if let Ok(handle) = tokio::runtime::Handle::try_current() {
+            let _ = handle.spawn(async move {
+                let mut lock = requests.lock().await;
+                lock.remove(&key);
+            });
+        }
+    }
+}
+
 impl ElicitationRequestManager {
     async fn resolve(
         &self,
@@ -188,10 +221,12 @@ impl ElicitationRequestManager {
             let server_name = server_name.clone();
             async move {
                 let (tx, rx) = oneshot::channel();
+                let key = (server_name.clone(), id.clone());
                 {
                     let mut lock = elicitation_requests.lock().await;
-                    lock.insert((server_name.clone(), id.clone()), tx);
+                    lock.insert(key.clone(), tx);
                 }
+                let mut cleanup = ElicitationRequestCleanup::new(elicitation_requests.clone(), key);
                 let _ = tx_event
                     .send(Event {
                         id: "mcp_elicitation_request".to_string(),
@@ -202,8 +237,11 @@ impl ElicitationRequestManager {
                         }),
                     })
                     .await;
-                rx.await
-                    .context("elicitation request channel closed unexpectedly")
+                let response = rx
+                    .await
+                    .context("elicitation request channel closed unexpectedly")?;
+                cleanup.disarm();
+                Ok(response)
             }
             .boxed()
         })

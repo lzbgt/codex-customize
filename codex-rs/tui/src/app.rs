@@ -86,6 +86,7 @@ use tokio::sync::Mutex;
 use tokio::sync::broadcast;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::error::TryRecvError;
+use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::mpsc::unbounded_channel;
 
 const EXTERNAL_EDITOR_HINT: &str = "Save and close external editor to continue.";
@@ -830,7 +831,12 @@ impl App {
         self.active_thread_rx = None;
     }
 
-    async fn enqueue_thread_event(&mut self, thread_id: ThreadId, event: Event) -> Result<()> {
+    async fn enqueue_thread_event(
+        &mut self,
+        tui: &mut tui::Tui,
+        thread_id: ThreadId,
+        event: Event,
+    ) -> Result<()> {
         let (sender, store) = {
             let channel = self.ensure_thread_channel(thread_id);
             (channel.sender.clone(), Arc::clone(&channel.store))
@@ -842,15 +848,33 @@ impl App {
             guard.active
         };
 
-        if should_send && let Err(err) = sender.send(event).await {
-            tracing::warn!("thread {thread_id} event channel closed: {err}");
+        if should_send {
+            match sender.try_send(event) {
+                Ok(()) => {}
+                Err(TrySendError::Closed(event)) => {
+                    tracing::warn!("thread {thread_id} event channel closed: {event:?}");
+                }
+                Err(TrySendError::Full(event)) => {
+                    self.drain_active_thread_events(tui).await?;
+                    match sender.try_send(event) {
+                        Ok(()) => {}
+                        Err(TrySendError::Closed(event)) => {
+                            tracing::warn!("thread {thread_id} event channel closed: {event:?}");
+                        }
+                        Err(TrySendError::Full(event)) => {
+                            tracing::warn!("thread {thread_id} event channel full; dropping event");
+                            tracing::debug!("dropped event: {event:?}");
+                        }
+                    }
+                }
+            }
         }
         Ok(())
     }
 
-    async fn enqueue_primary_event(&mut self, event: Event) -> Result<()> {
+    async fn enqueue_primary_event(&mut self, tui: &mut tui::Tui, event: Event) -> Result<()> {
         if let Some(thread_id) = self.primary_thread_id {
-            return self.enqueue_thread_event(thread_id, event).await;
+            return self.enqueue_thread_event(tui, thread_id, event).await;
         }
 
         if let EventMsg::SessionConfigured(session) = &event.msg {
@@ -862,9 +886,10 @@ impl App {
 
             let pending = std::mem::take(&mut self.pending_primary_events);
             for pending_event in pending {
-                self.enqueue_thread_event(thread_id, pending_event).await?;
+                self.enqueue_thread_event(tui, thread_id, pending_event)
+                    .await?;
             }
-            self.enqueue_thread_event(thread_id, event).await?;
+            self.enqueue_thread_event(tui, thread_id, event).await?;
         } else {
             self.pending_primary_events.push_back(event);
         }
@@ -1565,7 +1590,7 @@ impl App {
                         "Failed to initialize codex: {normalized}"
                     ))));
                 }
-                self.enqueue_primary_event(event).await?;
+                self.enqueue_primary_event(tui, event).await?;
             }
             AppEvent::Exit(mode) => match mode {
                 ExitMode::ShutdownFirst => self.chat_widget.submit_op(Op::Shutdown),

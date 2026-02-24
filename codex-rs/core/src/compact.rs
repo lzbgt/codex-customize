@@ -27,6 +27,7 @@ use codex_protocol::models::ResponseItem;
 use codex_protocol::protocol::RolloutItem;
 use codex_protocol::user_input::UserInput;
 use futures::prelude::*;
+use tokio_util::sync::CancellationToken;
 use tracing::error;
 
 pub const SUMMARIZATION_PROMPT: &str = include_str!("../templates/compact/prompt.md");
@@ -43,6 +44,7 @@ pub(crate) fn should_use_remote_compact_task(
 pub(crate) async fn run_inline_auto_compact_task(
     sess: Arc<Session>,
     turn_context: Arc<TurnContext>,
+    cancellation_token: CancellationToken,
 ) {
     let prompt = turn_context.compact_prompt().to_string();
     let input = vec![UserInput::Text {
@@ -51,25 +53,27 @@ pub(crate) async fn run_inline_auto_compact_task(
         text_elements: Vec::new(),
     }];
 
-    run_compact_task_inner(sess, turn_context, input).await;
+    run_compact_task_inner(sess, turn_context, input, cancellation_token).await;
 }
 
 pub(crate) async fn run_compact_task(
     sess: Arc<Session>,
     turn_context: Arc<TurnContext>,
     input: Vec<UserInput>,
+    cancellation_token: CancellationToken,
 ) {
     let start_event = EventMsg::TurnStarted(TurnStartedEvent {
         model_context_window: turn_context.client.get_model_context_window(),
     });
     sess.send_event(&turn_context, start_event).await;
-    run_compact_task_inner(sess.clone(), turn_context, input).await;
+    run_compact_task_inner(sess.clone(), turn_context, input, cancellation_token).await;
 }
 
 async fn run_compact_task_inner(
     sess: Arc<Session>,
     turn_context: Arc<TurnContext>,
     input: Vec<UserInput>,
+    cancellation_token: CancellationToken,
 ) {
     let initial_input_for_turn: ResponseInputItem = ResponseInputItem::from(input);
 
@@ -115,7 +119,8 @@ async fn run_compact_task_inner(
             personality: turn_context.personality,
             ..Default::default()
         };
-        let attempt_result = drain_to_completed(&sess, turn_context.as_ref(), &prompt).await;
+        let attempt_result =
+            drain_to_completed(&sess, turn_context.as_ref(), &prompt, &cancellation_token).await;
 
         match attempt_result {
             Ok(()) => {
@@ -331,11 +336,29 @@ async fn drain_to_completed(
     sess: &Session,
     turn_context: &TurnContext,
     prompt: &Prompt,
+    cancellation_token: &CancellationToken,
 ) -> CodexResult<()> {
     let mut client_session = turn_context.client.new_session();
     let mut stream = client_session.stream(prompt).await?;
+    let idle_timeout = turn_context.client.get_provider().stream_idle_timeout();
     loop {
-        let maybe_event = stream.next().await;
+        let maybe_event = tokio::select! {
+            _ = cancellation_token.cancelled() => {
+                return Err(CodexErr::TurnAborted);
+            }
+            result = tokio::time::timeout(idle_timeout, stream.next()) => {
+                match result {
+                    Ok(event) => event,
+                    Err(_) => {
+                        let idle_secs = idle_timeout.as_secs_f64();
+                        return Err(CodexErr::Stream(
+                            format!("stream idle timeout while compacting ({idle_secs:.1}s)"),
+                            None,
+                        ));
+                    }
+                }
+            }
+        };
         let Some(event) = maybe_event else {
             return Err(CodexErr::Stream(
                 "stream closed before response.completed".into(),
