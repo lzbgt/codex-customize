@@ -1285,8 +1285,7 @@ impl App {
             }
         }
 
-        let tui_events = tui.event_stream();
-        tokio::pin!(tui_events);
+        let mut tui_events = tui.event_stream();
 
         tui.frame_requester().schedule_frame();
 
@@ -1313,8 +1312,14 @@ impl App {
                     }
                     AppRunControl::Continue
                 }
-                Some(event) = tui_events.next() => {
-                    app.handle_tui_event(tui, event).await?
+                event = tui_events.next() => {
+                    if let Some(event) = event {
+                        app.handle_tui_event(tui, event).await?
+                    } else {
+                        tracing::warn!("tui event stream ended; recreating");
+                        tui_events = tui.event_stream();
+                        AppRunControl::Continue
+                    }
                 }
                 // Listen on new thread creation due to collab tools.
                 created = thread_created_rx.recv(), if listen_for_threads => {
