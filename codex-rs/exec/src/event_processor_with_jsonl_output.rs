@@ -526,7 +526,7 @@ impl EventProcessor for EventProcessorWithJsonOutput {
         for conv_event in aggregated {
             match serde_json::to_string(&conv_event) {
                 Ok(line) => {
-                    println!("{line}");
+                    safe_println!("{line}");
                 }
                 Err(e) => {
                     error!("Failed to serialize event: {e:?}");

@@ -1,3 +1,6 @@
+#[macro_use]
+mod output;
+
 mod auth_status;
 mod find_codex_home;
 mod logging_client_handler;

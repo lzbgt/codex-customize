@@ -1,3 +1,6 @@
+#[macro_use]
+mod output;
+
 mod device_code_auth;
 mod pkce;
 mod server;

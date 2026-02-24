@@ -134,7 +134,7 @@ pub fn run_login_server(opts: ServerOptions) -> io::Result<LoginServer> {
         thread::spawn(move || -> io::Result<()> {
             while let Ok(request) = server.recv() {
                 tx.blocking_send(request).map_err(|e| {
-                    eprintln!("Failed to send request to channel: {e}");
+                    safe_eprintln!("Failed to send request to channel: {e}");
                     io::Error::other("Failed to send request to channel")
                 })?;
             }
@@ -227,7 +227,7 @@ async fn process_request(
     let parsed_url = match url::Url::parse(&format!("http://localhost{url_raw}")) {
         Ok(u) => u,
         Err(e) => {
-            eprintln!("URL parse error: {e}");
+            safe_eprintln!("URL parse error: {e}");
             return HandledRequest::Response(
                 Response::from_string("Bad Request").with_status_code(400),
             );
@@ -261,7 +261,7 @@ async fn process_request(
                         opts.forced_chatgpt_workspace_id.as_deref(),
                         &tokens.id_token,
                     ) {
-                        eprintln!("Workspace restriction error: {message}");
+                        safe_eprintln!("Workspace restriction error: {message}");
                         return login_error_response(&message);
                     }
                     // Obtain API key via token-exchange and persist
@@ -278,7 +278,7 @@ async fn process_request(
                     )
                     .await
                     {
-                        eprintln!("Persist error: {err}");
+                        safe_eprintln!("Persist error: {err}");
                         return HandledRequest::Response(
                             Response::from_string(format!("Unable to persist auth file: {err}"))
                                 .with_status_code(500),
@@ -299,7 +299,7 @@ async fn process_request(
                     }
                 }
                 Err(err) => {
-                    eprintln!("Token exchange error: {err}");
+                    safe_eprintln!("Token exchange error: {err}");
                     HandledRequest::Response(
                         Response::from_string(format!("Token exchange failed: {err}"))
                             .with_status_code(500),
@@ -463,7 +463,7 @@ fn bind_server(port: u16) -> io::Result<Server> {
                     if !cancel_attempted {
                         cancel_attempted = true;
                         if let Err(cancel_err) = send_cancel_request(port) {
-                            eprintln!("Failed to cancel previous login server: {cancel_err}");
+                            safe_eprintln!("Failed to cancel previous login server: {cancel_err}");
                         }
                     }
 
@@ -622,7 +622,7 @@ fn jwt_auth_claims(jwt: &str) -> serde_json::Map<String, serde_json::Value> {
     let (_h, payload_b64, _s) = match (parts.next(), parts.next(), parts.next()) {
         (Some(h), Some(p), Some(s)) if !h.is_empty() && !p.is_empty() && !s.is_empty() => (h, p, s),
         _ => {
-            eprintln!("Invalid JWT format while extracting claims");
+            safe_eprintln!("Invalid JWT format while extracting claims");
             return serde_json::Map::new();
         }
     };
@@ -635,14 +635,14 @@ fn jwt_auth_claims(jwt: &str) -> serde_json::Map<String, serde_json::Value> {
                 {
                     return obj.clone();
                 }
-                eprintln!("JWT payload missing expected 'https://api.openai.com/auth' object");
+                safe_eprintln!("JWT payload missing expected 'https://api.openai.com/auth' object");
             }
             Err(e) => {
-                eprintln!("Failed to parse JWT JSON payload: {e}");
+                safe_eprintln!("Failed to parse JWT JSON payload: {e}");
             }
         },
         Err(e) => {
-            eprintln!("Failed to base64url-decode JWT payload: {e}");
+            safe_eprintln!("Failed to base64url-decode JWT payload: {e}");
         }
     }
     serde_json::Map::new()

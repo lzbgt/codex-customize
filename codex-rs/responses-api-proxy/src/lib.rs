@@ -1,3 +1,6 @@
+#[macro_use]
+mod output;
+
 use std::fs::File;
 use std::fs::{self};
 use std::io::Write;
@@ -94,7 +97,7 @@ pub fn run_main(args: Args) -> Result<()> {
             .context("building reqwest client")?,
     );
 
-    eprintln!("responses-api-proxy listening on {bound_addr}");
+    safe_eprintln!("responses-api-proxy listening on {bound_addr}");
 
     let http_shutdown = args.http_shutdown;
     for request in server.incoming_requests() {
@@ -107,7 +110,7 @@ pub fn run_main(args: Args) -> Result<()> {
             }
 
             if let Err(e) = forward_request(&client, auth_header, &forward_config, request) {
-                eprintln!("forwarding error: {e}");
+                safe_eprintln!("forwarding error: {e}");
             }
         });
     }

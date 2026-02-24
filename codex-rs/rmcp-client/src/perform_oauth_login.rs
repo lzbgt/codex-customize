@@ -107,17 +107,17 @@ fn spawn_callback_server(server: Arc<Server>, tx: oneshot::Sender<(String, Strin
                 let response =
                     Response::from_string("Authentication complete. You may close this window.");
                 if let Err(err) = request.respond(response) {
-                    eprintln!("Failed to respond to OAuth callback: {err}");
+                    safe_eprintln!("Failed to respond to OAuth callback: {err}");
                 }
                 if let Err(err) = tx.send((code, state)) {
-                    eprintln!("Failed to send OAuth callback: {err:?}");
+                    safe_eprintln!("Failed to send OAuth callback: {err:?}");
                 }
                 break;
             } else {
                 let response =
                     Response::from_string("Invalid OAuth callback").with_status_code(400);
                 if let Err(err) = request.respond(response) {
-                    eprintln!("Failed to respond to OAuth callback: {err}");
+                    safe_eprintln!("Failed to respond to OAuth callback: {err}");
                 }
             }
         }
@@ -287,12 +287,12 @@ impl OauthLoginFlow {
         if self.launch_browser {
             let server_name = &self.server_name;
             let auth_url = &self.auth_url;
-            println!(
+            safe_println!(
                 "Authorize `{server_name}` by opening this URL in your browser:\n{auth_url}\n"
             );
 
             if webbrowser::open(auth_url).is_err() {
-                println!("(Browser launch failed; please copy the URL above manually.)");
+                safe_println!("(Browser launch failed; please copy the URL above manually.)");
             }
         }
 
@@ -341,7 +341,7 @@ impl OauthLoginFlow {
             let result = self.finish().await;
 
             if let Err(err) = &result {
-                eprintln!(
+                safe_eprintln!(
                     "Failed to complete OAuth login for '{server_name_for_logging}': {err:#}"
                 );
             }

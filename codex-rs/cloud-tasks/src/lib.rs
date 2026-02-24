@@ -1,3 +1,5 @@
+#[macro_use]
+mod output;
 mod app;
 mod cli;
 pub mod env_detect;
@@ -71,7 +73,7 @@ async fn init_backend(user_agent_suffix: &str) -> anyhow::Result<BackendContext>
     let auth = match auth {
         Some(auth) => auth,
         None => {
-            eprintln!(
+            safe_eprintln!(
                 "Not signed in. Please run 'codex login' to sign in with ChatGPT, then re-run 'codex cloud'."
             );
             std::process::exit(1);
@@ -85,7 +87,7 @@ async fn init_backend(user_agent_suffix: &str) -> anyhow::Result<BackendContext>
     let token = match auth.get_token() {
         Ok(t) if !t.is_empty() => t,
         _ => {
-            eprintln!(
+            safe_eprintln!(
                 "Not signed in. Please run 'codex login' to sign in with ChatGPT, then re-run 'codex cloud'."
             );
             std::process::exit(1);
@@ -176,7 +178,7 @@ async fn run_exec_command(args: crate::cli::ExecCommand) -> anyhow::Result<()> {
     )
     .await?;
     let url = util::task_url(&ctx.base_url, &created.id.0);
-    println!("{url}");
+    safe_println!("{url}");
     Ok(())
 }
 
@@ -236,7 +238,7 @@ fn resolve_query_input(query_arg: Option<String>) -> anyhow::Result<String> {
                 ));
             }
             if !force_stdin {
-                eprintln!("Reading query from stdin...");
+                safe_eprintln!("Reading query from stdin...");
             }
             let mut buffer = String::new();
             std::io::stdin()
@@ -499,7 +501,7 @@ async fn run_status_command(args: crate::cli::StatusCommand) -> anyhow::Result<(
     let now = Utc::now();
     let colorize = supports_color::on(SupportStream::Stdout).is_some();
     for line in format_task_status_lines(&summary, now, colorize) {
-        println!("{line}");
+        safe_println!("{line}");
     }
     if !matches!(summary.status, TaskStatus::Ready) {
         std::process::exit(1);
@@ -548,27 +550,27 @@ async fn run_list_command(args: crate::cli::ListCommand) -> anyhow::Result<()> {
             "tasks": tasks,
             "cursor": page.cursor,
         });
-        println!("{}", serde_json::to_string_pretty(&payload)?);
+        safe_println!("{}", serde_json::to_string_pretty(&payload)?);
         return Ok(());
     }
     if page.tasks.is_empty() {
-        println!("No tasks found.");
+        safe_println!("No tasks found.");
         return Ok(());
     }
     let now = Utc::now();
     let colorize = supports_color::on(SupportStream::Stdout).is_some();
     for line in format_task_list_lines(&page.tasks, &ctx.base_url, now, colorize) {
-        println!("{line}");
+        safe_println!("{line}");
     }
     if let Some(cursor) = page.cursor {
         let command = format!("codex cloud list --cursor='{cursor}'");
         if colorize {
-            println!(
+            safe_println!(
                 "\nTo fetch the next page, run {}",
                 command.if_supports_color(Stream::Stdout, |text| text.cyan())
             );
         } else {
-            println!("\nTo fetch the next page, run {command}");
+            safe_println!("\nTo fetch the next page, run {command}");
         }
     }
     Ok(())
@@ -594,7 +596,7 @@ async fn run_apply_command(args: crate::cli::ApplyCommand) -> anyhow::Result<()>
         Some(selected.diff.clone()),
     )
     .await?;
-    println!("{}", outcome.message);
+    safe_println!("{}", outcome.message);
     if !matches!(
         outcome.status,
         codex_cloud_tasks_client::ApplyStatus::Success

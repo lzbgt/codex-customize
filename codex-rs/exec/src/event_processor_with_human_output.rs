@@ -119,7 +119,7 @@ struct PatchApplyBegin {
 /// Timestamped helper. The timestamp is styled with self.dimmed.
 macro_rules! ts_msg {
     ($self:ident, $($arg:tt)*) => {{
-        eprintln!($($arg)*);
+        safe_eprintln!($($arg)*);
     }};
 }
 
@@ -148,10 +148,10 @@ impl EventProcessor for EventProcessorWithHumanOutput {
         ));
 
         for (key, value) in entries {
-            eprintln!("{} {}", format!("{key}:").style(self.bold), value);
+            safe_eprintln!("{} {}", format!("{key}:").style(self.bold), value);
         }
 
-        eprintln!("--------");
+        safe_eprintln!("--------");
 
         // Echo the prompt that will be sent to the agent so it is visible in the
         // transcript/logs before any events come in. Note the prompt may have been
@@ -267,7 +267,7 @@ impl EventProcessor for EventProcessorWithHumanOutput {
                 if !self.show_agent_reasoning {
                     return CodexStatus::Running;
                 }
-                eprintln!();
+                safe_eprintln!();
             }
             EventMsg::AgentReasoningRawContent(AgentReasoningRawContentEvent { text }) => {
                 if self.show_raw_agent_reasoning {
@@ -318,7 +318,7 @@ impl EventProcessor for EventProcessorWithHumanOutput {
                         ts_msg!(self, "{}", title.style(self.red));
                     }
                 }
-                eprintln!("{}", truncated_output.style(self.dimmed));
+                safe_eprintln!("{}", truncated_output.style(self.dimmed));
             }
             EventMsg::McpToolCallBegin(McpToolCallBeginEvent {
                 call_id: _,
@@ -357,7 +357,7 @@ impl EventProcessor for EventProcessorWithHumanOutput {
                         serde_json::to_string_pretty(&val).unwrap_or_else(|_| val.to_string());
 
                     for line in pretty.lines().take(MAX_OUTPUT_LINES_FOR_EXEC_TOOL_CALL) {
-                        eprintln!("{}", line.style(self.dimmed));
+                        safe_eprintln!("{}", line.style(self.dimmed));
                     }
                 }
             }
@@ -396,9 +396,9 @@ impl EventProcessor for EventProcessorWithHumanOutput {
                                 format_file_change(change),
                                 path.to_string_lossy()
                             );
-                            eprintln!("{}", header.style(self.magenta));
+                            safe_eprintln!("{}", header.style(self.magenta));
                             for line in content.lines() {
-                                eprintln!("{}", line.style(self.green));
+                                safe_eprintln!("{}", line.style(self.green));
                             }
                         }
                         FileChange::Delete { content } => {
@@ -407,9 +407,9 @@ impl EventProcessor for EventProcessorWithHumanOutput {
                                 format_file_change(change),
                                 path.to_string_lossy()
                             );
-                            eprintln!("{}", header.style(self.magenta));
+                            safe_eprintln!("{}", header.style(self.magenta));
                             for line in content.lines() {
-                                eprintln!("{}", line.style(self.red));
+                                safe_eprintln!("{}", line.style(self.red));
                             }
                         }
                         FileChange::Update {
@@ -426,20 +426,20 @@ impl EventProcessor for EventProcessorWithHumanOutput {
                             } else {
                                 format!("{} {}", format_file_change(change), path.to_string_lossy())
                             };
-                            eprintln!("{}", header.style(self.magenta));
+                            safe_eprintln!("{}", header.style(self.magenta));
 
                             // Colorize diff lines. We keep file header lines
                             // (--- / +++) without extra coloring so they are
                             // still readable.
                             for diff_line in unified_diff.lines() {
                                 if diff_line.starts_with('+') && !diff_line.starts_with("+++") {
-                                    eprintln!("{}", diff_line.style(self.green));
+                                    safe_eprintln!("{}", diff_line.style(self.green));
                                 } else if diff_line.starts_with('-')
                                     && !diff_line.starts_with("---")
                                 {
-                                    eprintln!("{}", diff_line.style(self.red));
+                                    safe_eprintln!("{}", diff_line.style(self.red));
                                 } else {
-                                    eprintln!("{diff_line}");
+                                    safe_eprintln!("{diff_line}");
                                 }
                             }
                         }
@@ -478,7 +478,7 @@ impl EventProcessor for EventProcessorWithHumanOutput {
                 let title = format!("{label} exited {exit_code}{duration}:");
                 ts_msg!(self, "{}", title.style(title_style));
                 for line in output.lines() {
-                    eprintln!("{}", line.style(self.dimmed));
+                    safe_eprintln!("{}", line.style(self.dimmed));
                 }
             }
             EventMsg::TurnDiff(TurnDiffEvent { unified_diff }) => {
@@ -487,7 +487,7 @@ impl EventProcessor for EventProcessorWithHumanOutput {
                     "{}",
                     "file update:".style(self.magenta).style(self.italic)
                 );
-                eprintln!("{unified_diff}");
+                safe_eprintln!("{unified_diff}");
             }
             EventMsg::AgentReasoning(agent_reasoning_event) => {
                 if self.show_agent_reasoning {
@@ -514,7 +514,7 @@ impl EventProcessor for EventProcessorWithHumanOutput {
                 );
 
                 ts_msg!(self, "model: {}", model);
-                eprintln!();
+                safe_eprintln!();
             }
             EventMsg::PlanUpdate(plan_update_event) => {
                 let UpdatePlanArgs { explanation, plan } = plan_update_event;
@@ -614,7 +614,7 @@ impl EventProcessor for EventProcessorWithHumanOutput {
 
     fn print_final_output(&mut self) {
         if let Some(usage_info) = &self.last_total_token_usage {
-            eprintln!(
+            safe_eprintln!(
                 "{}\n{}",
                 "tokens used".style(self.magenta).style(self.italic),
                 format_with_separators(usage_info.total_token_usage.blended_total())
@@ -630,7 +630,7 @@ impl EventProcessor for EventProcessorWithHumanOutput {
             if message.ends_with('\n') {
                 print!("{message}");
             } else {
-                println!("{message}");
+                safe_println!("{message}");
             }
         }
     }

@@ -1,3 +1,5 @@
+#[macro_use]
+mod output;
 mod client;
 
 pub use client::LMStudioClient;

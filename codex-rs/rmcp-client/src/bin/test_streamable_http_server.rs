@@ -1,4 +1,8 @@
 use std::borrow::Cow;
+#[macro_use]
+#[path = "../output.rs"]
+mod output;
+
 use std::collections::HashMap;
 use std::io::ErrorKind;
 use std::net::SocketAddr;
@@ -253,14 +257,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let listener = match tokio::net::TcpListener::bind(&bind_addr).await {
         Ok(listener) => listener,
         Err(err) if err.kind() == ErrorKind::PermissionDenied => {
-            eprintln!(
+            safe_eprintln!(
                 "failed to bind to {bind_addr}: {err}. make sure the process has network access"
             );
             return Ok(());
         }
         Err(err) => return Err(err.into()),
     };
-    eprintln!("starting rmcp streamable http test server on http://{bind_addr}/mcp");
+    safe_eprintln!("starting rmcp streamable http test server on http://{bind_addr}/mcp");
 
     let router = Router::new()
         .route(

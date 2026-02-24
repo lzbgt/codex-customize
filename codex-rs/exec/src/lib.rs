@@ -4,6 +4,8 @@
 // For both modes, any other output must be written to stderr.
 #![deny(clippy::print_stdout)]
 
+#[macro_use]
+mod output;
 mod cli;
 mod event_processor;
 mod event_processor_with_human_output;
@@ -133,7 +135,7 @@ pub async fn run_main(cli: Cli, codex_linux_sandbox_exe: Option<PathBuf>) -> any
         Ok(v) => v,
         #[allow(clippy::print_stderr)]
         Err(e) => {
-            eprintln!("Error parsing -c overrides: {e}");
+            safe_eprintln!("Error parsing -c overrides: {e}");
             std::process::exit(1);
         }
     };
@@ -150,7 +152,7 @@ pub async fn run_main(cli: Cli, codex_linux_sandbox_exe: Option<PathBuf>) -> any
         let codex_home = match find_codex_home() {
             Ok(codex_home) => codex_home,
             Err(err) => {
-                eprintln!("Error finding codex home: {err}");
+                safe_eprintln!("Error finding codex home: {err}");
                 std::process::exit(1);
             }
         };
@@ -169,12 +171,12 @@ pub async fn run_main(cli: Cli, codex_linux_sandbox_exe: Option<PathBuf>) -> any
                     .and_then(|err| err.downcast_ref::<ConfigLoadError>())
                     .map(ConfigLoadError::config_error);
                 if let Some(config_error) = config_error {
-                    eprintln!(
+                    safe_eprintln!(
                         "Error loading config.toml:\n{}",
                         format_config_error_with_source(config_error)
                     );
                 } else {
-                    eprintln!("Error loading config.toml: {err}");
+                    safe_eprintln!("Error loading config.toml: {err}");
                 }
                 std::process::exit(1);
             }
@@ -236,7 +238,7 @@ pub async fn run_main(cli: Cli, codex_linux_sandbox_exe: Option<PathBuf>) -> any
         Config::load_with_cli_overrides_and_harness_overrides(cli_kv_overrides, overrides).await?;
 
     if let Err(err) = enforce_login_restrictions(&config) {
-        eprintln!("{err}");
+        safe_eprintln!("{err}");
         std::process::exit(1);
     }
 
@@ -253,11 +255,11 @@ pub async fn run_main(cli: Cli, codex_linux_sandbox_exe: Option<PathBuf>) -> any
     })) {
         Ok(Ok(otel)) => otel,
         Ok(Err(e)) => {
-            eprintln!("Could not create otel exporter: {e}");
+            safe_eprintln!("Could not create otel exporter: {e}");
             None
         }
         Err(_) => {
-            eprintln!("Could not create otel exporter: panicked during initialization");
+            safe_eprintln!("Could not create otel exporter: panicked during initialization");
             None
         }
     };
@@ -316,7 +318,9 @@ pub async fn run_main(cli: Cli, codex_linux_sandbox_exe: Option<PathBuf>) -> any
         && !dangerously_bypass_approvals_and_sandbox
         && get_git_repo_root(&default_cwd).is_none()
     {
-        eprintln!("Not inside a trusted directory and --skip-git-repo-check was not specified.");
+        safe_eprintln!(
+            "Not inside a trusted directory and --skip-git-repo-check was not specified."
+        );
         std::process::exit(1);
     }
 
@@ -567,7 +571,7 @@ fn load_output_schema(path: Option<PathBuf>) -> Option<Value> {
     let schema_str = match std::fs::read_to_string(&path) {
         Ok(contents) => contents,
         Err(err) => {
-            eprintln!(
+            safe_eprintln!(
                 "Failed to read output schema file {}: {err}",
                 path.display()
             );
@@ -578,7 +582,7 @@ fn load_output_schema(path: Option<PathBuf>) -> Option<Value> {
     match serde_json::from_str::<Value>(&schema_str) {
         Ok(value) => Some(value),
         Err(err) => {
-            eprintln!(
+            safe_eprintln!(
                 "Output schema file {} is not valid JSON: {err}",
                 path.display()
             );
@@ -667,32 +671,32 @@ fn resolve_prompt(prompt_arg: Option<String>) -> String {
             let force_stdin = matches!(maybe_dash.as_deref(), Some("-"));
 
             if std::io::stdin().is_terminal() && !force_stdin {
-                eprintln!(
+                safe_eprintln!(
                     "No prompt provided. Either specify one as an argument or pipe the prompt into stdin."
                 );
                 std::process::exit(1);
             }
 
             if !force_stdin {
-                eprintln!("Reading prompt from stdin...");
+                safe_eprintln!("Reading prompt from stdin...");
             }
 
             let mut bytes = Vec::new();
             if let Err(e) = std::io::stdin().read_to_end(&mut bytes) {
-                eprintln!("Failed to read prompt from stdin: {e}");
+                safe_eprintln!("Failed to read prompt from stdin: {e}");
                 std::process::exit(1);
             }
 
             let buffer = match decode_prompt_bytes(&bytes) {
                 Ok(s) => s,
                 Err(e) => {
-                    eprintln!("Failed to read prompt from stdin: {e}");
+                    safe_eprintln!("Failed to read prompt from stdin: {e}");
                     std::process::exit(1);
                 }
             };
 
             if buffer.trim().is_empty() {
-                eprintln!("No prompt provided via stdin.");
+                safe_eprintln!("No prompt provided via stdin.");
                 std::process::exit(1);
             }
             buffer

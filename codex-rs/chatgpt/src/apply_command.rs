@@ -74,6 +74,6 @@ async fn apply_diff(diff: &str, cwd: Option<PathBuf>) -> anyhow::Result<()> {
             res.stderr
         );
     }
-    println!("Successfully applied diff");
+    safe_println!("Successfully applied diff");
     Ok(())
 }

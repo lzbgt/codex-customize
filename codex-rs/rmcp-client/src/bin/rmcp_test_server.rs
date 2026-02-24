@@ -1,3 +1,7 @@
+#[macro_use]
+#[path = "../output.rs"]
+mod output;
+
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -129,7 +133,7 @@ impl ServerHandler for TestToolServer {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    eprintln!("starting rmcp test server");
+    safe_eprintln!("starting rmcp test server");
     // Run the server with STDIO transport. If the client disconnects we simply
     // bubble up the error so the process exits.
     let service = TestToolServer::new();
