@@ -257,7 +257,7 @@ async fn run_add(config_overrides: &CliConfigOverrides, add_args: AddArgs) -> Re
         .await
         .with_context(|| format!("failed to write MCP servers to {}", codex_home.display()))?;
 
-    println!("Added global MCP server '{name}'.");
+    safe_println!("Added global MCP server '{name}'.");
 
     if let McpServerTransportConfig::StreamableHttp {
         url,
@@ -268,7 +268,7 @@ async fn run_add(config_overrides: &CliConfigOverrides, add_args: AddArgs) -> Re
     {
         match supports_oauth_login(&url).await {
             Ok(true) => {
-                println!("Detected OAuth support. Starting OAuth flow…");
+                safe_println!("Detected OAuth support. Starting OAuth flow…");
                 perform_oauth_login(
                     &name,
                     &url,
@@ -279,10 +279,10 @@ async fn run_add(config_overrides: &CliConfigOverrides, add_args: AddArgs) -> Re
                     config.mcp_oauth_callback_port,
                 )
                 .await?;
-                println!("Successfully logged in.");
+                safe_println!("Successfully logged in.");
             }
             Ok(false) => {}
-            Err(_) => println!(
+            Err(_) => safe_println!(
                 "MCP server may or may not require login. Run `codex mcp login {name}` to login."
             ),
         }
@@ -316,9 +316,9 @@ async fn run_remove(config_overrides: &CliConfigOverrides, remove_args: RemoveAr
     }
 
     if removed {
-        println!("Removed global MCP server '{name}'.");
+        safe_println!("Removed global MCP server '{name}'.");
     } else {
-        println!("No MCP server named '{name}' found.");
+        safe_println!("No MCP server named '{name}' found.");
     }
 
     Ok(())
@@ -358,7 +358,7 @@ async fn run_login(config_overrides: &CliConfigOverrides, login_args: LoginArgs)
         config.mcp_oauth_callback_port,
     )
     .await?;
-    println!("Successfully logged in to MCP server '{name}'.");
+    safe_println!("Successfully logged in to MCP server '{name}'.");
     Ok(())
 }
 
@@ -384,8 +384,8 @@ async fn run_logout(config_overrides: &CliConfigOverrides, logout_args: LogoutAr
     };
 
     match delete_oauth_tokens(&name, &url, config.mcp_oauth_credentials_store_mode) {
-        Ok(true) => println!("Removed OAuth credentials for '{name}'."),
-        Ok(false) => println!("No OAuth credentials stored for '{name}'."),
+        Ok(true) => safe_println!("Removed OAuth credentials for '{name}'."),
+        Ok(false) => safe_println!("No OAuth credentials stored for '{name}'."),
         Err(err) => return Err(anyhow!("failed to delete OAuth credentials: {err}")),
     }
 
@@ -463,12 +463,12 @@ async fn run_list(config_overrides: &CliConfigOverrides, list_args: ListArgs) ->
             })
             .collect();
         let output = serde_json::to_string_pretty(&json_entries)?;
-        println!("{output}");
+        safe_println!("{output}");
         return Ok(());
     }
 
     if entries.is_empty() {
-        println!("No MCP servers configured yet. Try `codex mcp add my-tool -- my-command`.");
+        safe_println!("No MCP servers configured yet. Try `codex mcp add my-tool -- my-command`.");
         return Ok(());
     }
 
@@ -551,7 +551,7 @@ async fn run_list(config_overrides: &CliConfigOverrides, list_args: ListArgs) ->
             }
         }
 
-        println!(
+        safe_println!(
             "{name:<name_w$}  {command:<cmd_w$}  {args:<args_w$}  {env:<env_w$}  {cwd:<cwd_w$}  {status:<status_w$}  {auth:<auth_w$}",
             name = "Name",
             command = "Command",
@@ -570,7 +570,7 @@ async fn run_list(config_overrides: &CliConfigOverrides, list_args: ListArgs) ->
         );
 
         for row in &stdio_rows {
-            println!(
+            safe_println!(
                 "{name:<name_w$}  {command:<cmd_w$}  {args:<args_w$}  {env:<env_w$}  {cwd:<cwd_w$}  {status:<status_w$}  {auth:<auth_w$}",
                 name = row[0].as_str(),
                 command = row[1].as_str(),
@@ -591,7 +591,7 @@ async fn run_list(config_overrides: &CliConfigOverrides, list_args: ListArgs) ->
     }
 
     if !stdio_rows.is_empty() && !http_rows.is_empty() {
-        println!();
+        safe_println!();
     }
 
     if !http_rows.is_empty() {
@@ -608,7 +608,7 @@ async fn run_list(config_overrides: &CliConfigOverrides, list_args: ListArgs) ->
             }
         }
 
-        println!(
+        safe_println!(
             "{name:<name_w$}  {url:<url_w$}  {token:<token_w$}  {status:<status_w$}  {auth:<auth_w$}",
             name = "Name",
             url = "Url",
@@ -623,7 +623,7 @@ async fn run_list(config_overrides: &CliConfigOverrides, list_args: ListArgs) ->
         );
 
         for row in &http_rows {
-            println!(
+            safe_println!(
                 "{name:<name_w$}  {url:<url_w$}  {token:<token_w$}  {status:<status_w$}  {auth:<auth_w$}",
                 name = row[0].as_str(),
                 url = row[1].as_str(),
@@ -697,21 +697,21 @@ async fn run_get(config_overrides: &CliConfigOverrides, get_args: GetArgs) -> Re
                 .tool_timeout_sec
                 .map(|timeout| timeout.as_secs_f64()),
         }))?;
-        println!("{output}");
+        safe_println!("{output}");
         return Ok(());
     }
 
     if !server.enabled {
         if let Some(reason) = server.disabled_reason.as_ref() {
-            println!("{name} (disabled: {reason})", name = get_args.name);
+            safe_println!("{name} (disabled: {reason})", name = get_args.name);
         } else {
-            println!("{name} (disabled)", name = get_args.name);
+            safe_println!("{name} (disabled)", name = get_args.name);
         }
         return Ok(());
     }
 
-    println!("{}", get_args.name);
-    println!("  enabled: {}", server.enabled);
+    safe_println!("{}", get_args.name);
+    safe_println!("  enabled: {}", server.enabled);
     let format_tool_list = |tools: &Option<Vec<String>>| -> String {
         match tools {
             Some(list) if list.is_empty() => "[]".to_string(),
@@ -721,11 +721,11 @@ async fn run_get(config_overrides: &CliConfigOverrides, get_args: GetArgs) -> Re
     };
     if server.enabled_tools.is_some() {
         let enabled_tools_display = format_tool_list(&server.enabled_tools);
-        println!("  enabled_tools: {enabled_tools_display}");
+        safe_println!("  enabled_tools: {enabled_tools_display}");
     }
     if server.disabled_tools.is_some() {
         let disabled_tools_display = format_tool_list(&server.disabled_tools);
-        println!("  disabled_tools: {disabled_tools_display}");
+        safe_println!("  disabled_tools: {disabled_tools_display}");
     }
     match &server.transport {
         McpServerTransportConfig::Stdio {
@@ -735,22 +735,22 @@ async fn run_get(config_overrides: &CliConfigOverrides, get_args: GetArgs) -> Re
             env_vars,
             cwd,
         } => {
-            println!("  transport: stdio");
-            println!("  command: {command}");
+            safe_println!("  transport: stdio");
+            safe_println!("  command: {command}");
             let args_display = if args.is_empty() {
                 "-".to_string()
             } else {
                 args.join(" ")
             };
-            println!("  args: {args_display}");
+            safe_println!("  args: {args_display}");
             let cwd_display = cwd
                 .as_ref()
                 .map(|path| path.display().to_string())
                 .filter(|value| !value.is_empty())
                 .unwrap_or_else(|| "-".to_string());
-            println!("  cwd: {cwd_display}");
+            safe_println!("  cwd: {cwd_display}");
             let env_display = format_env_display(env.as_ref(), env_vars);
-            println!("  env: {env_display}");
+            safe_println!("  env: {env_display}");
         }
         McpServerTransportConfig::StreamableHttp {
             url,
@@ -758,10 +758,10 @@ async fn run_get(config_overrides: &CliConfigOverrides, get_args: GetArgs) -> Re
             http_headers,
             env_http_headers,
         } => {
-            println!("  transport: streamable_http");
-            println!("  url: {url}");
+            safe_println!("  transport: streamable_http");
+            safe_println!("  url: {url}");
             let bearer_token_display = bearer_token_env_var.as_deref().unwrap_or("-");
-            println!("  bearer_token_env_var: {bearer_token_display}");
+            safe_println!("  bearer_token_env_var: {bearer_token_display}");
             let headers_display = match http_headers {
                 Some(map) if !map.is_empty() => {
                     let mut pairs: Vec<_> = map.iter().collect();
@@ -774,7 +774,7 @@ async fn run_get(config_overrides: &CliConfigOverrides, get_args: GetArgs) -> Re
                 }
                 _ => "-".to_string(),
             };
-            println!("  http_headers: {headers_display}");
+            safe_println!("  http_headers: {headers_display}");
             let env_headers_display = match env_http_headers {
                 Some(map) if !map.is_empty() => {
                     let mut pairs: Vec<_> = map.iter().collect();
@@ -787,16 +787,16 @@ async fn run_get(config_overrides: &CliConfigOverrides, get_args: GetArgs) -> Re
                 }
                 _ => "-".to_string(),
             };
-            println!("  env_http_headers: {env_headers_display}");
+            safe_println!("  env_http_headers: {env_headers_display}");
         }
     }
     if let Some(timeout) = server.startup_timeout_sec {
-        println!("  startup_timeout_sec: {}", timeout.as_secs_f64());
+        safe_println!("  startup_timeout_sec: {}", timeout.as_secs_f64());
     }
     if let Some(timeout) = server.tool_timeout_sec {
-        println!("  tool_timeout_sec: {}", timeout.as_secs_f64());
+        safe_println!("  tool_timeout_sec: {}", timeout.as_secs_f64());
     }
-    println!("  remove: codex mcp remove {}", get_args.name);
+    safe_println!("  remove: codex mcp remove {}", get_args.name);
 
     Ok(())
 }

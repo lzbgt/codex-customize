@@ -179,11 +179,11 @@ async fn run_command_under_sandbox(
             let capture = match res {
                 Ok(Ok(v)) => v,
                 Ok(Err(err)) => {
-                    eprintln!("windows sandbox failed: {err}");
+                    safe_eprintln!("windows sandbox failed: {err}");
                     std::process::exit(1);
                 }
                 Err(join_err) => {
-                    eprintln!("windows sandbox join error: {join_err}");
+                    safe_eprintln!("windows sandbox join error: {join_err}");
                     std::process::exit(1);
                 }
             };
@@ -254,12 +254,12 @@ async fn run_command_under_sandbox(
     #[cfg(target_os = "macos")]
     if let Some(denial_logger) = denial_logger {
         let denials = denial_logger.finish().await;
-        eprintln!("\n=== Sandbox denials ===");
+        safe_eprintln!("\n=== Sandbox denials ===");
         if denials.is_empty() {
-            eprintln!("None found.");
+            safe_eprintln!("None found.");
         } else {
             for seatbelt::SandboxDenial { name, capability } in denials {
-                eprintln!("({name}) {capability}");
+                safe_eprintln!("({name}) {capability}");
             }
         }
     }

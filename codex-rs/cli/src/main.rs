@@ -31,6 +31,9 @@ use std::io::IsTerminal;
 use std::path::PathBuf;
 use supports_color::Stream;
 
+#[macro_use]
+mod output;
+
 mod mcp_cmd;
 #[cfg(not(windows))]
 mod wsl_paths;
@@ -349,7 +352,7 @@ fn format_exit_messages(exit_info: AppExitInfo, color_enabled: bool) -> Vec<Stri
 fn handle_app_exit(exit_info: AppExitInfo) -> anyhow::Result<()> {
     match exit_info.exit_reason {
         ExitReason::Fatal(message) => {
-            eprintln!("ERROR: {message}");
+            safe_eprintln!("ERROR: {message}");
             std::process::exit(1);
         }
         ExitReason::UserRequested => { /* normal exit */ }
@@ -358,7 +361,7 @@ fn handle_app_exit(exit_info: AppExitInfo) -> anyhow::Result<()> {
     let update_action = exit_info.update_action;
     let color_enabled = supports_color::on(Stream::Stdout).is_some();
     for line in format_exit_messages(exit_info, color_enabled) {
-        println!("{line}");
+        safe_println!("{line}");
     }
     if let Some(action) = update_action {
         run_update_action(action)?;
@@ -368,9 +371,9 @@ fn handle_app_exit(exit_info: AppExitInfo) -> anyhow::Result<()> {
 
 /// Run the update action and print the result.
 fn run_update_action(action: UpdateAction) -> anyhow::Result<()> {
-    println!();
+    safe_println!();
     let cmd_str = action.command_str();
-    println!("Updating Codex via `{cmd_str}`...");
+    safe_println!("Updating Codex via `{cmd_str}`...");
 
     let status = {
         #[cfg(windows)]
@@ -396,8 +399,8 @@ fn run_update_action(action: UpdateAction) -> anyhow::Result<()> {
     if !status.success() {
         anyhow::bail!("`{cmd_str}` failed with status {status}");
     }
-    println!();
-    println!("🎉 Update ran successfully! Please restart Codex.");
+    safe_println!();
+    safe_println!("🎉 Update ran successfully! Please restart Codex.");
     Ok(())
 }
 
@@ -586,7 +589,7 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
                         )
                         .await;
                     } else if login_cli.api_key.is_some() {
-                        eprintln!(
+                        safe_eprintln!(
                             "The --api-key flag is no longer supported. Pipe the key instead, e.g. `printenv OPENAI_API_KEY | codex login --with-api-key`."
                         );
                         std::process::exit(1);
@@ -709,7 +712,7 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
                 }
 
                 for (name, stage, enabled) in rows {
-                    println!("{name:<name_width$}  {stage:<stage_width$}  {enabled}");
+                    safe_println!("{name:<name_width$}  {stage:<stage_width$}  {enabled}");
                 }
             }
         },
@@ -746,7 +749,7 @@ async fn run_interactive_tui(
             ));
         }
 
-        eprintln!(
+        safe_eprintln!(
             "WARNING: TERM is set to \"dumb\". Codex's interactive TUI may not work in this terminal."
         );
         if !confirm("Continue anyway? [y/N]: ")? {
@@ -760,7 +763,7 @@ async fn run_interactive_tui(
 }
 
 fn confirm(prompt: &str) -> std::io::Result<bool> {
-    eprintln!("{prompt}");
+    safe_eprintln!("{prompt}");
 
     let mut input = String::new();
     std::io::stdin().read_line(&mut input)?;

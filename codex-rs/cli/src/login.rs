@@ -21,7 +21,7 @@ const API_KEY_LOGIN_DISABLED_MESSAGE: &str =
 const LOGIN_SUCCESS_MESSAGE: &str = "Successfully logged in";
 
 fn print_login_server_start(actual_port: u16, auth_url: &str) {
-    eprintln!(
+    safe_eprintln!(
         "Starting local login server on http://localhost:{actual_port}.\nIf your browser did not open, navigate to this URL to authenticate:\n\n{auth_url}"
     );
 }
@@ -48,7 +48,7 @@ pub async fn run_login_with_chatgpt(cli_config_overrides: CliConfigOverrides) ->
     let config = load_config_or_exit(cli_config_overrides).await;
 
     if matches!(config.forced_login_method, Some(ForcedLoginMethod::Api)) {
-        eprintln!("{CHATGPT_LOGIN_DISABLED_MESSAGE}");
+        safe_eprintln!("{CHATGPT_LOGIN_DISABLED_MESSAGE}");
         std::process::exit(1);
     }
 
@@ -62,11 +62,11 @@ pub async fn run_login_with_chatgpt(cli_config_overrides: CliConfigOverrides) ->
     .await
     {
         Ok(_) => {
-            eprintln!("{LOGIN_SUCCESS_MESSAGE}");
+            safe_eprintln!("{LOGIN_SUCCESS_MESSAGE}");
             std::process::exit(0);
         }
         Err(e) => {
-            eprintln!("Error logging in: {e}");
+            safe_eprintln!("Error logging in: {e}");
             std::process::exit(1);
         }
     }
@@ -79,7 +79,7 @@ pub async fn run_login_with_api_key(
     let config = load_config_or_exit(cli_config_overrides).await;
 
     if matches!(config.forced_login_method, Some(ForcedLoginMethod::Chatgpt)) {
-        eprintln!("{API_KEY_LOGIN_DISABLED_MESSAGE}");
+        safe_eprintln!("{API_KEY_LOGIN_DISABLED_MESSAGE}");
         std::process::exit(1);
     }
 
@@ -89,11 +89,11 @@ pub async fn run_login_with_api_key(
         config.cli_auth_credentials_store_mode,
     ) {
         Ok(_) => {
-            eprintln!("{LOGIN_SUCCESS_MESSAGE}");
+            safe_eprintln!("{LOGIN_SUCCESS_MESSAGE}");
             std::process::exit(0);
         }
         Err(e) => {
-            eprintln!("Error logging in: {e}");
+            safe_eprintln!("Error logging in: {e}");
             std::process::exit(1);
         }
     }
@@ -103,23 +103,23 @@ pub fn read_api_key_from_stdin() -> String {
     let mut stdin = std::io::stdin();
 
     if stdin.is_terminal() {
-        eprintln!(
+        safe_eprintln!(
             "--with-api-key expects the API key on stdin. Try piping it, e.g. `printenv OPENAI_API_KEY | codex login --with-api-key`."
         );
         std::process::exit(1);
     }
 
-    eprintln!("Reading API key from stdin...");
+    safe_eprintln!("Reading API key from stdin...");
 
     let mut buffer = String::new();
     if let Err(err) = stdin.read_to_string(&mut buffer) {
-        eprintln!("Failed to read API key from stdin: {err}");
+        safe_eprintln!("Failed to read API key from stdin: {err}");
         std::process::exit(1);
     }
 
     let api_key = buffer.trim().to_string();
     if api_key.is_empty() {
-        eprintln!("No API key provided via stdin.");
+        safe_eprintln!("No API key provided via stdin.");
         std::process::exit(1);
     }
 
@@ -134,7 +134,7 @@ pub async fn run_login_with_device_code(
 ) -> ! {
     let config = load_config_or_exit(cli_config_overrides).await;
     if matches!(config.forced_login_method, Some(ForcedLoginMethod::Api)) {
-        eprintln!("{CHATGPT_LOGIN_DISABLED_MESSAGE}");
+        safe_eprintln!("{CHATGPT_LOGIN_DISABLED_MESSAGE}");
         std::process::exit(1);
     }
     let forced_chatgpt_workspace_id = config.forced_chatgpt_workspace_id.clone();
@@ -149,11 +149,11 @@ pub async fn run_login_with_device_code(
     }
     match run_device_code_login(opts).await {
         Ok(()) => {
-            eprintln!("{LOGIN_SUCCESS_MESSAGE}");
+            safe_eprintln!("{LOGIN_SUCCESS_MESSAGE}");
             std::process::exit(0);
         }
         Err(e) => {
-            eprintln!("Error logging in with device code: {e}");
+            safe_eprintln!("Error logging in with device code: {e}");
             std::process::exit(1);
         }
     }
@@ -170,7 +170,7 @@ pub async fn run_login_with_device_code_fallback_to_browser(
 ) -> ! {
     let config = load_config_or_exit(cli_config_overrides).await;
     if matches!(config.forced_login_method, Some(ForcedLoginMethod::Api)) {
-        eprintln!("{CHATGPT_LOGIN_DISABLED_MESSAGE}");
+        safe_eprintln!("{CHATGPT_LOGIN_DISABLED_MESSAGE}");
         std::process::exit(1);
     }
 
@@ -188,33 +188,33 @@ pub async fn run_login_with_device_code_fallback_to_browser(
 
     match run_device_code_login(opts.clone()).await {
         Ok(()) => {
-            eprintln!("{LOGIN_SUCCESS_MESSAGE}");
+            safe_eprintln!("{LOGIN_SUCCESS_MESSAGE}");
             std::process::exit(0);
         }
         Err(e) => {
             if e.kind() == std::io::ErrorKind::NotFound {
-                eprintln!("Device code login is not enabled; falling back to browser login.");
+                safe_eprintln!("Device code login is not enabled; falling back to browser login.");
                 match run_login_server(opts) {
                     Ok(server) => {
                         print_login_server_start(server.actual_port, &server.auth_url);
                         match server.block_until_done().await {
                             Ok(()) => {
-                                eprintln!("{LOGIN_SUCCESS_MESSAGE}");
+                                safe_eprintln!("{LOGIN_SUCCESS_MESSAGE}");
                                 std::process::exit(0);
                             }
                             Err(e) => {
-                                eprintln!("Error logging in: {e}");
+                                safe_eprintln!("Error logging in: {e}");
                                 std::process::exit(1);
                             }
                         }
                     }
                     Err(e) => {
-                        eprintln!("Error logging in: {e}");
+                        safe_eprintln!("Error logging in: {e}");
                         std::process::exit(1);
                     }
                 }
             } else {
-                eprintln!("Error logging in with device code: {e}");
+                safe_eprintln!("Error logging in with device code: {e}");
                 std::process::exit(1);
             }
         }
@@ -228,25 +228,25 @@ pub async fn run_login_status(cli_config_overrides: CliConfigOverrides) -> ! {
         Ok(Some(auth)) => match auth.mode {
             AuthMode::ApiKey => match auth.get_token() {
                 Ok(api_key) => {
-                    eprintln!("Logged in using an API key - {}", safe_format_key(&api_key));
+                    safe_eprintln!("Logged in using an API key - {}", safe_format_key(&api_key));
                     std::process::exit(0);
                 }
                 Err(e) => {
-                    eprintln!("Unexpected error retrieving API key: {e}");
+                    safe_eprintln!("Unexpected error retrieving API key: {e}");
                     std::process::exit(1);
                 }
             },
             AuthMode::ChatGPT => {
-                eprintln!("Logged in using ChatGPT");
+                safe_eprintln!("Logged in using ChatGPT");
                 std::process::exit(0);
             }
         },
         Ok(None) => {
-            eprintln!("Not logged in");
+            safe_eprintln!("Not logged in");
             std::process::exit(1);
         }
         Err(e) => {
-            eprintln!("Error checking login status: {e}");
+            safe_eprintln!("Error checking login status: {e}");
             std::process::exit(1);
         }
     }
@@ -257,15 +257,15 @@ pub async fn run_logout(cli_config_overrides: CliConfigOverrides) -> ! {
 
     match logout(&config.codex_home, config.cli_auth_credentials_store_mode) {
         Ok(true) => {
-            eprintln!("Successfully logged out");
+            safe_eprintln!("Successfully logged out");
             std::process::exit(0);
         }
         Ok(false) => {
-            eprintln!("Not logged in");
+            safe_eprintln!("Not logged in");
             std::process::exit(0);
         }
         Err(e) => {
-            eprintln!("Error logging out: {e}");
+            safe_eprintln!("Error logging out: {e}");
             std::process::exit(1);
         }
     }
@@ -275,7 +275,7 @@ async fn load_config_or_exit(cli_config_overrides: CliConfigOverrides) -> Config
     let cli_overrides = match cli_config_overrides.parse_overrides() {
         Ok(v) => v,
         Err(e) => {
-            eprintln!("Error parsing -c overrides: {e}");
+            safe_eprintln!("Error parsing -c overrides: {e}");
             std::process::exit(1);
         }
     };
@@ -283,7 +283,7 @@ async fn load_config_or_exit(cli_config_overrides: CliConfigOverrides) -> Config
     match Config::load_with_cli_overrides(cli_overrides).await {
         Ok(config) => config,
         Err(e) => {
-            eprintln!("Error loading configuration: {e}");
+            safe_eprintln!("Error loading configuration: {e}");
             std::process::exit(1);
         }
     }
