@@ -128,13 +128,12 @@ where
     B: Backend,
     B: Write,
 {
-    #[allow(clippy::print_stderr)]
     fn drop(&mut self) {
         // Attempt to restore the cursor state
         if self.hidden_cursor
             && let Err(err) = self.show_cursor()
         {
-            eprintln!("Failed to show the cursor: {err}");
+            let _ = writeln!(std::io::stderr(), "Failed to show the cursor: {err}");
         }
     }
 }

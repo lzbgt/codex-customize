@@ -34,6 +34,7 @@ use codex_protocol::config_types::AltScreenMode;
 use codex_protocol::config_types::SandboxMode;
 use codex_utils_absolute_path::AbsolutePathBuf;
 use std::fs::OpenOptions;
+use std::io::Write;
 use std::path::PathBuf;
 use tracing::error;
 use tracing_appender::non_blocking;
@@ -146,19 +147,17 @@ pub async fn run_main(
     let cli_kv_overrides = match overrides_cli.parse_overrides() {
         // Parse `-c` overrides from the CLI.
         Ok(v) => v,
-        #[allow(clippy::print_stderr)]
         Err(e) => {
-            eprintln!("Error parsing -c overrides: {e}");
+            let _ = writeln!(std::io::stderr(), "Error parsing -c overrides: {e}");
             std::process::exit(1);
         }
     };
 
     // we load config.toml here to determine project state.
-    #[allow(clippy::print_stderr)]
     let codex_home = match find_codex_home() {
         Ok(codex_home) => codex_home.to_path_buf(),
         Err(err) => {
-            eprintln!("Error finding codex home: {err}");
+            let _ = writeln!(std::io::stderr(), "Error finding codex home: {err}");
             std::process::exit(1);
         }
     };
@@ -169,7 +168,6 @@ pub async fn run_main(
         None => AbsolutePathBuf::current_dir()?,
     };
 
-    #[allow(clippy::print_stderr)]
     let config_toml = match load_config_as_toml_with_cli_overrides(
         &codex_home,
         &config_cwd,
@@ -184,12 +182,13 @@ pub async fn run_main(
                 .and_then(|err| err.downcast_ref::<ConfigLoadError>())
                 .map(ConfigLoadError::config_error);
             if let Some(config_error) = config_error {
-                eprintln!(
+                let _ = writeln!(
+                    std::io::stderr(),
                     "Error loading config.toml:\n{}",
                     format_config_error_with_source(config_error)
                 );
             } else {
-                eprintln!("Error loading config.toml: {err}");
+                let _ = writeln!(std::io::stderr(), "Error loading config.toml: {err}");
             }
             std::process::exit(1);
         }
@@ -252,16 +251,12 @@ pub async fn run_main(
     let config = load_config_or_exit(cli_kv_overrides.clone(), overrides.clone()).await;
 
     if let Some(warning) = add_dir_warning_message(&cli.add_dir, config.sandbox_policy.get()) {
-        #[allow(clippy::print_stderr)]
-        {
-            eprintln!("Error adding directories: {warning}");
-            std::process::exit(1);
-        }
+        let _ = writeln!(std::io::stderr(), "Error adding directories: {warning}");
+        std::process::exit(1);
     }
 
-    #[allow(clippy::print_stderr)]
     if let Err(err) = enforce_login_restrictions(&config) {
-        eprintln!("{err}");
+        let _ = writeln!(std::io::stderr(), "{err}");
         std::process::exit(1);
     }
 
@@ -327,17 +322,14 @@ pub async fn run_main(
     })) {
         Ok(Ok(otel)) => otel,
         Ok(Err(e)) => {
-            #[allow(clippy::print_stderr)]
-            {
-                eprintln!("Could not create otel exporter: {e}");
-            }
+            let _ = writeln!(std::io::stderr(), "Could not create otel exporter: {e}");
             None
         }
         Err(_) => {
-            #[allow(clippy::print_stderr)]
-            {
-                eprintln!("Could not create otel exporter: panicked during initialization");
-            }
+            let _ = writeln!(
+                std::io::stderr(),
+                "Could not create otel exporter: panicked during initialization"
+            );
             None
         }
     };
@@ -649,13 +641,10 @@ async fn run_ratatui_app(
     app_result
 }
 
-#[expect(
-    clippy::print_stderr,
-    reason = "TUI should no longer be displayed, so we can write to stderr."
-)]
 fn restore() {
     if let Err(err) = tui::restore() {
-        eprintln!(
+        let _ = writeln!(
+            std::io::stderr(),
             "failed to restore terminal. Run `reset` or restart your terminal to recover: {err}"
         );
     }
@@ -728,7 +717,6 @@ async fn load_config_or_exit_with_fallback_cwd(
     overrides: ConfigOverrides,
     fallback_cwd: Option<PathBuf>,
 ) -> Config {
-    #[allow(clippy::print_stderr)]
     match ConfigBuilder::default()
         .cli_overrides(cli_kv_overrides)
         .harness_overrides(overrides)
@@ -738,7 +726,7 @@ async fn load_config_or_exit_with_fallback_cwd(
     {
         Ok(config) => config,
         Err(err) => {
-            eprintln!("Error loading configuration: {err}");
+            let _ = writeln!(std::io::stderr(), "Error loading configuration: {err}");
             std::process::exit(1);
         }
     }
