@@ -58,24 +58,38 @@ pub struct EventBroker<S: EventSource = CrosstermEventSource> {
 
 /// Tracks state of underlying [`EventSource`].
 enum EventBrokerState<S: EventSource> {
-    Paused,     // Underlying event source (i.e., crossterm EventStream) dropped
-    Start,      // A new event source will be created on next poll
-    Running(S), // Event source is currently running
+    Paused,                       // Underlying event source (i.e., crossterm EventStream) dropped
+    Start,                        // A new event source will be created on next poll
+    Running(EventSourceState<S>), // Event source is currently running
 }
 
 impl<S: EventSource + Default> EventBrokerState<S> {
-    /// Return the running event source, starting it if needed; None when paused.
-    fn active_event_source_mut(&mut self) -> Option<&mut S> {
+    /// Return the running event state, starting it if needed; None when paused.
+    fn event_state_mut(&mut self) -> Option<&mut EventSourceState<S>> {
         match self {
             EventBrokerState::Paused => None,
             EventBrokerState::Start => {
-                *self = EventBrokerState::Running(S::default());
+                *self = EventBrokerState::Running(EventSourceState::new(S::default()));
                 match self {
-                    EventBrokerState::Running(events) => Some(events),
+                    EventBrokerState::Running(state) => Some(state),
                     EventBrokerState::Paused | EventBrokerState::Start => unreachable!(),
                 }
             }
-            EventBrokerState::Running(events) => Some(events),
+            EventBrokerState::Running(state) => Some(state),
+        }
+    }
+}
+
+struct EventSourceState<S> {
+    source: Option<S>,
+    polling: bool,
+}
+
+impl<S> EventSourceState<S> {
+    fn new(source: S) -> Self {
+        Self {
+            source: Some(source),
+            polling: false,
         }
     }
 }
@@ -207,8 +221,8 @@ impl<S: EventSource + Default + Unpin> TuiEventStream<S> {
                         return Poll::Pending;
                     }
                 };
-                let events = match state.active_event_source_mut() {
-                    Some(events) => events,
+                let event_state = match state.event_state_mut() {
+                    Some(state) => state,
                     None => {
                         drop(state);
                         // Poll resume_stream so resume_events wakes a stream paused here
@@ -219,15 +233,60 @@ impl<S: EventSource + Default + Unpin> TuiEventStream<S> {
                         }
                     }
                 };
-                match Pin::new(events).poll_next(cx) {
-                    Poll::Ready(Some(Ok(event))) => Some(event),
-                    Poll::Ready(Some(Err(_))) | Poll::Ready(None) => {
-                        *state = EventBrokerState::Start;
+                if event_state.polling {
+                    drop(state);
+                    cx.waker().wake_by_ref();
+                    return Poll::Pending;
+                }
+                let mut events = event_state
+                    .source
+                    .take()
+                    .expect("event source missing while running");
+                event_state.polling = true;
+                drop(state);
+
+                let poll_result = Pin::new(&mut events).poll_next(cx);
+
+                let should_restart =
+                    matches!(poll_result, Poll::Ready(Some(Err(_))) | Poll::Ready(None));
+
+                let mut state = self
+                    .broker
+                    .state
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                match &mut *state {
+                    EventBrokerState::Paused => {
+                        drop(events);
+                        drop(state);
+                        return Poll::Pending;
+                    }
+                    EventBrokerState::Start => {
+                        drop(events);
                         drop(state);
                         return self.poll_after_crossterm_restart(cx);
                     }
+                    EventBrokerState::Running(state) => {
+                        state.polling = false;
+                    }
+                }
+                if should_restart {
+                    *state = EventBrokerState::Start;
+                    drop(events);
+                    drop(state);
+                    return self.poll_after_crossterm_restart(cx);
+                }
+                if let EventBrokerState::Running(state) = &mut *state {
+                    state.source = Some(events);
+                }
+                drop(state);
+
+                match poll_result {
+                    Poll::Ready(Some(Ok(event))) => Some(event),
+                    Poll::Ready(Some(Err(_))) | Poll::Ready(None) => {
+                        return self.poll_after_crossterm_restart(cx);
+                    }
                     Poll::Pending => {
-                        drop(state);
                         // Poll resume_stream so resume_events can wake us even while waiting on stdin
                         match Pin::new(&mut self.resume_stream).poll_next(cx) {
                             Poll::Ready(Some(())) => continue,
@@ -358,6 +417,7 @@ mod tests {
 
     struct FakeEventSourceHandle {
         broker: Arc<EventBroker<FakeEventSource>>,
+        last_tx: Mutex<Option<mpsc::UnboundedSender<EventResult>>>,
     }
 
     impl FakeEventSource {
@@ -375,19 +435,39 @@ mod tests {
 
     impl FakeEventSourceHandle {
         fn new(broker: Arc<EventBroker<FakeEventSource>>) -> Self {
-            Self { broker }
+            Self {
+                broker,
+                last_tx: Mutex::new(None),
+            }
         }
 
         fn send(&self, event: EventResult) {
-            let mut state = self
-                .broker
-                .state
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            let Some(source) = state.active_event_source_mut() else {
-                return;
+            let tx = {
+                let mut state = self
+                    .broker
+                    .state
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let Some(event_state) = state.event_state_mut() else {
+                    return;
+                };
+                if let Some(source) = event_state.source.as_ref() {
+                    let tx = source.tx.clone();
+                    *self
+                        .last_tx
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(tx.clone());
+                    Some(tx)
+                } else {
+                    self.last_tx
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .clone()
+                }
             };
-            let _ = source.tx.send(event);
+            if let Some(tx) = tx {
+                let _ = tx.send(event);
+            }
         }
     }
 
@@ -424,8 +504,8 @@ mod tests {
     fn setup() -> SetupState {
         let source = FakeEventSource::new();
         let broker = Arc::new(EventBroker::new());
-        *broker.state.lock().unwrap() = EventBrokerState::Running(source);
         let handle = FakeEventSourceHandle::new(broker.clone());
+        *broker.state.lock().unwrap() = EventBrokerState::Running(EventSourceState::new(source));
 
         let (draw_tx, draw_rx) = broadcast::channel(1);
         let terminal_focused = Arc::new(AtomicBool::new(true));
