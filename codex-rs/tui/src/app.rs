@@ -836,7 +836,15 @@ impl App {
         if !self.chat_widget.is_task_running() && !self.chat_widget.is_streaming() {
             return;
         }
-        if self.last_draw_at.elapsed() > Duration::from_secs(2) {
+        let elapsed = self.last_draw_at.elapsed();
+        if elapsed > Duration::from_secs(2) {
+            tracing::warn!(
+                elapsed_ms = elapsed.as_millis(),
+                task_running = self.chat_widget.is_task_running(),
+                streaming = self.chat_widget.is_streaming(),
+                overlay = self.overlay.is_some(),
+                "ui watchdog scheduling redraw after idle"
+            );
             tui.frame_requester().schedule_frame();
         }
     }
