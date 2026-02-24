@@ -8,6 +8,7 @@ This file tracks high-impact work items for this repo. Ordering is by priority (
   - Mitigation: skip cursor-position query while crossterm events are active to avoid stdin query deadlocks.
   - Mitigation: skip resume-time cursor queries unless the event stream is paused.
   - Mitigation: watchdog restarts the event stream after prolonged no-draw while streaming.
+  - Mitigation: avoid blocking the runtime on the event broker lock (use try_lock in poll).
   - Capture symbolicated stacks from a debug build (`lldb` or `sample` on the debug binary).
   - Identify the blocking await/condvar and add watchdog metrics/logging around event queues.
   - Add a regression test or targeted fuzz case once the root cause is confirmed.
