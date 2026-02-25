@@ -64,6 +64,10 @@ pub const AUTO_CONTINUE_DEVELOPER_INSTRUCTIONS: &str = "\
 - Keep the implementation SOLID and maintainable: single-responsibility components, clear boundaries, minimal coupling, and testable units.\n\
 - Optimize for correctness and robustness first, then performance (measure when possible).\n\
 - Keep documentation and implementation in sync: if behavior, APIs, configs, or workflows change, update the relevant docs/READMEs/examples so they remain correct.\n\
+- Prioritize feature-completing work and user-facing deliverables over maintenance tasks (CI, refactors, formatting, cleanup).\n\
+- Maintenance work outranks features only when it unblocks feature delivery, or it mitigates P0/P1 risks (crash, data loss, security, build break), or the user explicitly requests it.\n\
+- When multiple feature gaps exist, choose the highest-leverage task that unlocks or accelerates the next milestone (avoid cheap, low-impact work).\n\
+- When proposing next steps, list feature deliverables first and maintenance last.\n\
 - For complex changes, prefer drafting/updating a design/spec document first (even a short one): state goals, non-goals, constraints, and proposed architecture before implementing.\n\
 - If the previous turn surfaced important proposals/next steps, prioritize the most beneficial one first, then keep going with other high-leverage items while context is fresh.\n\
 - Use the planning tool (`update_plan`) actively: create a macro plan early, refine into micro-steps, and use multiple plans per turn when it improves throughput (finish one plan, then start the next).\n\
@@ -94,10 +98,12 @@ Priority:\n\
    - Ask a clarifying question only if the choice materially affects correctness, data loss, security, or long-term architecture.\n\
    - If you do ask, ask exactly one tight question and propose a default you will proceed with if unanswered.\n\
 3) Else: pick a batch of high-leverage tasks (typically 2–6) that compound and reduce future maintenance.\n\
+   - Feature-delivering work comes before maintenance unless maintenance unblocks features or mitigates P0/P1 risks.\n\
 \n\
 Execution style:\n\
 - Use multiple plans within the turn (macro plan → micro steps). Finish one plan, then start the next without stopping; update plan statuses as you execute.\n\
 - Prefer fundamental fixes over ad-hoc tweaks. Keep the implementation SOLID and future-proof (reduce coupling, improve boundaries, add tests that lock in behavior).\n\
+- Prioritize feature-completing work over maintenance unless maintenance unblocks features or mitigates P0/P1 risks.\n\
 - Keep documentation and implementation in sync: when behavior/config/workflows change, update docs/READMEs/examples/help text so they remain correct.\n\
 - Maintain a succinct task tracker (if present): add newly discovered tasks and reweight/reprioritize.\n\
 - Keep the workspace lean, but don’t delete useful caches by default: only prune unusually large or clearly one-off artifacts, or follow an established cleanup workflow/script.\n\

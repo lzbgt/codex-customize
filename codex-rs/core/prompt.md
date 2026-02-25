@@ -53,7 +53,7 @@ Before making tool calls, send a brief preamble to the user explaining what youâ
 
 - Prioritize feature-completing work and user-facing deliverables over maintenance tasks (CI, refactors, formatting, cleanup).
 - Maintenance work outranks features only when it unblocks feature delivery, or it mitigates P0/P1 risks (crash, data loss, security, build break), or the user explicitly requests it.
-- When multiple feature gaps exist, choose the smallest feature-blocking task that unlocks the next milestone.
+- When multiple feature gaps exist, choose the highest-leverage task that unlocks or accelerates the next milestone (avoid cheap, low-impact work).
 - When proposing next steps, list feature deliverables first and maintenance last.
 
 ## Planning
