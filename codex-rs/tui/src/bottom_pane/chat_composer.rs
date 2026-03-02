@@ -101,15 +101,22 @@ use super::file_search_popup::FileSearchPopup;
 use super::footer::CollaborationModeIndicator;
 use super::footer::FooterMode;
 use super::footer::FooterProps;
+use super::footer::SummaryLeft;
+use super::footer::can_show_left_with_context;
+use super::footer::context_window_line;
 use super::footer::esc_hint_mode;
 use super::footer::footer_height;
 use super::footer::footer_hint_items_width;
 use super::footer::footer_line_width;
 use super::footer::inset_footer_hint_area;
-use super::footer::render_footer;
+use super::footer::max_left_width_for_right;
+use super::footer::mode_indicator_line;
+use super::footer::render_context_right;
+use super::footer::render_footer_from_props;
 use super::footer::render_footer_hint_items;
-use super::footer::render_mode_indicator;
+use super::footer::render_footer_line;
 use super::footer::reset_mode_after_activity;
+use super::footer::single_line_footer_layout;
 use super::footer::toggle_shortcut_mode;
 use super::paste_burst::CharDecision;
 use super::paste_burst::PasteBurst;
@@ -142,6 +149,8 @@ use crate::bottom_pane::textarea::TextAreaState;
 use crate::clipboard_paste::normalize_pasted_path;
 use crate::clipboard_paste::pasted_image_format;
 use crate::history_cell;
+use crate::line_truncation::truncate_line_with_ellipsis_if_overflow;
+use crate::ui_consts::FOOTER_INDENT_COLS;
 use crate::ui_consts::LIVE_PREFIX_COLS;
 use codex_core::skills::model::SkillMetadata;
 use codex_file_search::FileMatch;
@@ -240,6 +249,8 @@ pub(crate) struct ChatComposer {
     steer_enabled: bool,
     collaboration_modes_enabled: bool,
     collaboration_mode_indicator: Option<CollaborationModeIndicator>,
+    status_line_value: Option<Line<'static>>,
+    status_line_enabled: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -291,7 +302,7 @@ impl ChatComposer {
             paste_burst: PasteBurst::default(),
             disable_paste_burst: false,
             custom_prompts: Vec::new(),
-            footer_mode: FooterMode::ShortcutSummary,
+            footer_mode: FooterMode::ComposerEmpty,
             footer_hint_override: None,
             footer_flash: None,
             context_window_percent: None,
@@ -301,6 +312,8 @@ impl ChatComposer {
             steer_enabled: false,
             collaboration_modes_enabled: false,
             collaboration_mode_indicator: None,
+            status_line_value: None,
+            status_line_enabled: false,
         };
         // Apply configuration via the setter to keep side-effects centralized.
         this.set_disable_paste_burst(disable_paste_burst);
@@ -336,7 +349,7 @@ impl ChatComposer {
         let footer_props = self.footer_props();
         let footer_hint_height = self
             .custom_footer_height()
-            .unwrap_or_else(|| footer_height(footer_props));
+            .unwrap_or_else(|| footer_height(&footer_props));
         let footer_spacing = Self::footer_spacing(footer_hint_height);
         let footer_total_height = footer_hint_height + footer_spacing;
         let popup_constraint = match &self.active_popup {
@@ -2167,39 +2180,70 @@ impl ChatComposer {
             return false;
         }
 
-        let next = toggle_shortcut_mode(self.footer_mode, self.quit_shortcut_hint_visible());
+        let next = toggle_shortcut_mode(
+            self.footer_mode,
+            self.quit_shortcut_hint_visible(),
+            self.is_empty(),
+        );
         let changed = next != self.footer_mode;
         self.footer_mode = next;
         changed
     }
 
     fn footer_props(&self) -> FooterProps {
+        let mode = self.footer_mode();
+        let is_wsl = {
+            #[cfg(target_os = "linux")]
+            {
+                mode == FooterMode::ShortcutOverlay && crate::clipboard_paste::is_probably_wsl()
+            }
+            #[cfg(not(target_os = "linux"))]
+            {
+                false
+            }
+        };
+
         FooterProps {
-            mode: self.footer_mode(),
+            mode,
             esc_backtrack_hint: self.esc_backtrack_hint,
             use_shift_enter_hint: self.use_shift_enter_hint,
             is_task_running: self.is_task_running,
             quit_shortcut_key: self.quit_shortcut_key,
-            steer_enabled: self.steer_enabled,
             collaboration_modes_enabled: self.collaboration_modes_enabled,
+            is_wsl,
             context_window_percent: self.context_window_percent,
             context_window_used_tokens: self.context_window_used_tokens,
+            status_line_value: self.status_line_value.clone(),
+            status_line_enabled: self.status_line_enabled,
         }
     }
 
+    /// Resolve the effective footer mode via a small priority waterfall.
+    ///
+    /// The base mode is derived solely from whether the composer is empty:
+    /// `ComposerEmpty` iff empty, otherwise `ComposerHasDraft`. Transient
+    /// modes (Esc hint, overlay, quit reminder) can override that base when
+    /// their conditions are active.
     fn footer_mode(&self) -> FooterMode {
+        let base_mode = if self.is_empty() {
+            FooterMode::ComposerEmpty
+        } else {
+            FooterMode::ComposerHasDraft
+        };
+
         match self.footer_mode {
             FooterMode::EscHint => FooterMode::EscHint,
             FooterMode::ShortcutOverlay => FooterMode::ShortcutOverlay,
             FooterMode::QuitShortcutReminder if self.quit_shortcut_hint_visible() => {
                 FooterMode::QuitShortcutReminder
             }
-            FooterMode::QuitShortcutReminder => FooterMode::ShortcutSummary,
-            FooterMode::ShortcutSummary if self.quit_shortcut_hint_visible() => {
+            FooterMode::ComposerEmpty | FooterMode::ComposerHasDraft
+                if self.quit_shortcut_hint_visible() =>
+            {
                 FooterMode::QuitShortcutReminder
             }
-            FooterMode::ShortcutSummary if !self.is_empty() => FooterMode::ContextOnly,
-            other => other,
+            FooterMode::QuitShortcutReminder => base_mode,
+            FooterMode::ComposerEmpty | FooterMode::ComposerHasDraft => base_mode,
         }
     }
 
@@ -2465,6 +2509,22 @@ impl ChatComposer {
         self.context_window_used_tokens = used_tokens;
     }
 
+    pub(crate) fn set_status_line(&mut self, status_line: Option<Line<'static>>) -> bool {
+        if self.status_line_value == status_line {
+            return false;
+        }
+        self.status_line_value = status_line;
+        true
+    }
+
+    pub(crate) fn set_status_line_enabled(&mut self, enabled: bool) -> bool {
+        if self.status_line_enabled == enabled {
+            return false;
+        }
+        self.status_line_enabled = enabled;
+        true
+    }
+
     pub(crate) fn set_esc_backtrack_hint(&mut self, show: bool) {
         self.esc_backtrack_hint = show;
         if show {
@@ -2490,7 +2550,7 @@ impl Renderable for ChatComposer {
         let footer_props = self.footer_props();
         let footer_hint_height = self
             .custom_footer_height()
-            .unwrap_or_else(|| footer_height(footer_props));
+            .unwrap_or_else(|| footer_height(&footer_props));
         let footer_spacing = Self::footer_spacing(footer_hint_height);
         let footer_total_height = footer_hint_height + footer_spacing;
         const COLS_WITH_MARGIN: u16 = LIVE_PREFIX_COLS + 1;
@@ -2519,9 +2579,25 @@ impl Renderable for ChatComposer {
             }
             ActivePopup::None => {
                 let footer_props = self.footer_props();
+                let show_cycle_hint =
+                    !footer_props.is_task_running && self.collaboration_mode_indicator.is_some();
+                let show_shortcuts_hint = match footer_props.mode {
+                    FooterMode::ComposerEmpty => !self.is_in_paste_burst(),
+                    FooterMode::ComposerHasDraft => false,
+                    FooterMode::QuitShortcutReminder
+                    | FooterMode::ShortcutOverlay
+                    | FooterMode::EscHint => false,
+                };
+                let show_queue_hint = match footer_props.mode {
+                    FooterMode::ComposerHasDraft => footer_props.is_task_running,
+                    FooterMode::QuitShortcutReminder
+                    | FooterMode::ComposerEmpty
+                    | FooterMode::ShortcutOverlay
+                    | FooterMode::EscHint => false,
+                };
                 let custom_height = self.custom_footer_height();
                 let footer_hint_height =
-                    custom_height.unwrap_or_else(|| footer_height(footer_props));
+                    custom_height.unwrap_or_else(|| footer_height(&footer_props));
                 let footer_spacing = Self::footer_spacing(footer_hint_height);
                 let hint_rect = if footer_spacing > 0 && footer_hint_height > 0 {
                     let [_, hint_rect] = Layout::vertical([
@@ -2533,26 +2609,181 @@ impl Renderable for ChatComposer {
                 } else {
                     popup_rect
                 };
-                let mut left_content_width = None;
-                if self.footer_flash_visible() {
+                let available_width =
+                    hint_rect.width.saturating_sub(FOOTER_INDENT_COLS as u16) as usize;
+                let status_line = footer_props
+                    .status_line_value
+                    .as_ref()
+                    .map(|line| line.clone().dim());
+                let status_line_candidate = footer_props.status_line_enabled
+                    && match footer_props.mode {
+                        FooterMode::ComposerEmpty => true,
+                        FooterMode::ComposerHasDraft => !footer_props.is_task_running,
+                        FooterMode::QuitShortcutReminder
+                        | FooterMode::ShortcutOverlay
+                        | FooterMode::EscHint => false,
+                    };
+                let mut truncated_status_line = if status_line_candidate {
+                    status_line.as_ref().map(|line| {
+                        truncate_line_with_ellipsis_if_overflow(line.clone(), available_width)
+                    })
+                } else {
+                    None
+                };
+                let status_line_active = status_line_candidate && truncated_status_line.is_some();
+                let left_mode_indicator = if status_line_active {
+                    None
+                } else {
+                    self.collaboration_mode_indicator
+                };
+                let mut left_width = if self.footer_flash_visible() {
+                    self.footer_flash
+                        .as_ref()
+                        .map(|flash| flash.line.width() as u16)
+                        .unwrap_or(0)
+                } else if let Some(items) = self.footer_hint_override.as_ref() {
+                    footer_hint_items_width(items)
+                } else if status_line_active {
+                    truncated_status_line
+                        .as_ref()
+                        .map(|line| line.width() as u16)
+                        .unwrap_or(0)
+                } else {
+                    footer_line_width(
+                        &footer_props,
+                        left_mode_indicator,
+                        show_cycle_hint,
+                        show_shortcuts_hint,
+                        show_queue_hint,
+                    )
+                };
+                let right_line = if status_line_active {
+                    let full =
+                        mode_indicator_line(self.collaboration_mode_indicator, show_cycle_hint);
+                    let compact = mode_indicator_line(self.collaboration_mode_indicator, false);
+                    let full_width = full.as_ref().map(|l| l.width() as u16).unwrap_or(0);
+                    if can_show_left_with_context(hint_rect, left_width, full_width) {
+                        full
+                    } else {
+                        compact
+                    }
+                } else {
+                    Some(context_window_line(
+                        footer_props.context_window_percent,
+                        footer_props.context_window_used_tokens,
+                    ))
+                };
+                let right_width = right_line.as_ref().map(|l| l.width() as u16).unwrap_or(0);
+                if status_line_active
+                    && let Some(max_left) = max_left_width_for_right(hint_rect, right_width)
+                    && left_width > max_left
+                    && let Some(line) = status_line.as_ref().map(|line| {
+                        truncate_line_with_ellipsis_if_overflow(line.clone(), max_left as usize)
+                    })
+                {
+                    left_width = line.width() as u16;
+                    truncated_status_line = Some(line);
+                }
+                let can_show_left_and_context =
+                    can_show_left_with_context(hint_rect, left_width, right_width);
+                let has_override =
+                    self.footer_flash_visible() || self.footer_hint_override.is_some();
+                let single_line_layout = if has_override || status_line_active {
+                    None
+                } else {
+                    match footer_props.mode {
+                        FooterMode::ComposerEmpty | FooterMode::ComposerHasDraft => {
+                            // Both of these modes render the single-line footer style (with
+                            // either the shortcuts hint or the optional queue hint). We still
+                            // want the single-line collapse rules so the mode label can win over
+                            // the context indicator on narrow widths.
+                            Some(single_line_footer_layout(
+                                hint_rect,
+                                right_width,
+                                left_mode_indicator,
+                                show_cycle_hint,
+                                show_shortcuts_hint,
+                                show_queue_hint,
+                            ))
+                        }
+                        FooterMode::EscHint
+                        | FooterMode::QuitShortcutReminder
+                        | FooterMode::ShortcutOverlay => None,
+                    }
+                };
+                let show_right = if matches!(
+                    footer_props.mode,
+                    FooterMode::EscHint
+                        | FooterMode::QuitShortcutReminder
+                        | FooterMode::ShortcutOverlay
+                ) {
+                    false
+                } else {
+                    single_line_layout
+                        .as_ref()
+                        .map(|(_, show_context)| *show_context)
+                        .unwrap_or(can_show_left_and_context)
+                };
+
+                if let Some((summary_left, _)) = single_line_layout {
+                    match summary_left {
+                        SummaryLeft::Default => {
+                            if status_line_active {
+                                if let Some(line) = truncated_status_line.clone() {
+                                    render_footer_line(hint_rect, buf, line);
+                                } else {
+                                    render_footer_from_props(
+                                        hint_rect,
+                                        buf,
+                                        &footer_props,
+                                        left_mode_indicator,
+                                        show_cycle_hint,
+                                        show_shortcuts_hint,
+                                        show_queue_hint,
+                                    );
+                                }
+                            } else {
+                                render_footer_from_props(
+                                    hint_rect,
+                                    buf,
+                                    &footer_props,
+                                    left_mode_indicator,
+                                    show_cycle_hint,
+                                    show_shortcuts_hint,
+                                    show_queue_hint,
+                                );
+                            }
+                        }
+                        SummaryLeft::Custom(line) => {
+                            render_footer_line(hint_rect, buf, line);
+                        }
+                        SummaryLeft::None => {}
+                    }
+                } else if self.footer_flash_visible() {
                     if let Some(flash) = self.footer_flash.as_ref() {
                         flash.line.render(inset_footer_hint_area(hint_rect), buf);
-                        left_content_width = Some(flash.line.width() as u16);
                     }
                 } else if let Some(items) = self.footer_hint_override.as_ref() {
                     render_footer_hint_items(hint_rect, buf, items);
-                    left_content_width = Some(footer_hint_items_width(items));
+                } else if status_line_active {
+                    if let Some(line) = truncated_status_line {
+                        render_footer_line(hint_rect, buf, line);
+                    }
                 } else {
-                    render_footer(hint_rect, buf, footer_props);
-                    left_content_width = Some(footer_line_width(footer_props));
+                    render_footer_from_props(
+                        hint_rect,
+                        buf,
+                        &footer_props,
+                        self.collaboration_mode_indicator,
+                        show_cycle_hint,
+                        show_shortcuts_hint,
+                        show_queue_hint,
+                    );
                 }
-                render_mode_indicator(
-                    hint_rect,
-                    buf,
-                    self.collaboration_mode_indicator,
-                    !footer_props.is_task_running,
-                    left_content_width,
-                );
+
+                if show_right && let Some(line) = &right_line {
+                    render_context_right(hint_rect, buf, line);
+                }
             }
         }
         let style = user_message_style();
@@ -2815,7 +3046,7 @@ mod tests {
         );
         setup(&mut composer);
         let footer_props = composer.footer_props();
-        let footer_lines = footer_height(footer_props);
+        let footer_lines = footer_height(&footer_props);
         let footer_spacing = ChatComposer::footer_spacing(footer_lines);
         let height = footer_lines + footer_spacing + 8;
         let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
@@ -2897,12 +3128,12 @@ mod tests {
 
         assert!(!composer.is_empty());
         assert_eq!(composer.current_text(), "d");
-        assert_eq!(composer.footer_mode, FooterMode::ShortcutSummary);
+        assert_eq!(composer.footer_mode, FooterMode::ComposerEmpty);
         assert!(matches!(composer.active_popup, ActivePopup::None));
 
         let _ = composer.handle_key_event(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
 
-        assert_eq!(composer.footer_mode, FooterMode::ShortcutSummary);
+        assert_eq!(composer.footer_mode, FooterMode::ComposerEmpty);
         assert!(!composer.esc_backtrack_hint);
     }
 
@@ -2966,11 +3197,11 @@ mod tests {
 
         // Toggle back to prompt mode so subsequent typing captures characters.
         let _ = composer.handle_key_event(KeyEvent::new(KeyCode::Char('?'), KeyModifiers::NONE));
-        assert_eq!(composer.footer_mode, FooterMode::ShortcutSummary);
+        assert_eq!(composer.footer_mode, FooterMode::ComposerEmpty);
 
         type_chars_humanlike(&mut composer, &['h']);
         assert_eq!(composer.textarea.text(), "h");
-        assert_eq!(composer.footer_mode(), FooterMode::ContextOnly);
+        assert_eq!(composer.footer_mode(), FooterMode::ComposerHasDraft);
 
         let (result, needs_redraw) =
             composer.handle_key_event(KeyEvent::new(KeyCode::Char('?'), KeyModifiers::NONE));
@@ -2978,8 +3209,8 @@ mod tests {
         assert!(needs_redraw, "typing should still mark the view dirty");
         let _ = flush_after_paste_burst(&mut composer);
         assert_eq!(composer.textarea.text(), "h?");
-        assert_eq!(composer.footer_mode, FooterMode::ShortcutSummary);
-        assert_eq!(composer.footer_mode(), FooterMode::ContextOnly);
+        assert_eq!(composer.footer_mode, FooterMode::ComposerEmpty);
+        assert_eq!(composer.footer_mode(), FooterMode::ComposerHasDraft);
     }
 
     /// Behavior: while a paste-like burst is being captured, `?` must not toggle the shortcut
