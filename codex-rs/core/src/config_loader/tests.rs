@@ -174,6 +174,7 @@ extra = true
         #[cfg(target_os = "macos")]
         managed_preferences_base64: None,
         macos_managed_config_requirements_base64: None,
+        ..Default::default()
     };
 
     let cwd = AbsolutePathBuf::try_from(tmp.path()).expect("cwd");
@@ -210,6 +211,7 @@ async fn returns_empty_when_all_layers_missing() {
         #[cfg(target_os = "macos")]
         managed_preferences_base64: None,
         macos_managed_config_requirements_base64: None,
+        ..Default::default()
     };
 
     let cwd = AbsolutePathBuf::try_from(tmp.path()).expect("cwd");
@@ -307,6 +309,7 @@ flag = false
             ),
         ),
         macos_managed_config_requirements_base64: None,
+        ..Default::default()
     };
 
     let cwd = AbsolutePathBuf::try_from(tmp.path()).expect("cwd");
@@ -353,6 +356,7 @@ allowed_sandbox_modes = ["read-only"]
                     .as_bytes(),
                 ),
             ),
+            ..Default::default()
         },
     )
     .await?;
@@ -413,6 +417,7 @@ allowed_approval_policies = ["never"]
                     .as_bytes(),
                 ),
             ),
+            ..Default::default()
         },
     )
     .await?;

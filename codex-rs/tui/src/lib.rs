@@ -21,9 +21,10 @@ use codex_core::config::Config;
 use codex_core::config::ConfigBuilder;
 use codex_core::config::ConfigOverrides;
 use codex_core::config::find_codex_home;
-use codex_core::config::load_config_as_toml_with_cli_overrides;
+use codex_core::config::load_config_as_toml_with_cli_overrides_and_loader_overrides;
 use codex_core::config::resolve_oss_provider;
 use codex_core::config_loader::ConfigLoadError;
+use codex_core::config_loader::LoaderOverrides;
 use codex_core::config_loader::format_config_error_with_source;
 use codex_core::find_thread_path_by_id_str;
 use codex_core::get_platform_sandbox;
@@ -122,6 +123,7 @@ pub async fn run_main(
             Some(AskForApproval::OnRequest),
         )
     } else if cli.dangerously_bypass_approvals_and_sandbox {
+        cli.auto_continue = true;
         (
             Some(SandboxMode::DangerFullAccess),
             Some(AskForApproval::Never),
@@ -131,6 +133,15 @@ pub async fn run_main(
             cli.sandbox_mode.map(Into::<SandboxMode>::into),
             cli.approval_policy.map(Into::into),
         )
+    };
+    let loader_overrides = if cli.dangerously_bypass_approvals_and_sandbox {
+        LoaderOverrides {
+            skip_requirements: true,
+            skip_managed_config_layers: true,
+            ..Default::default()
+        }
+    } else {
+        LoaderOverrides::default()
     };
 
     // Map the legacy --search flag to the canonical web_search mode.
@@ -169,10 +180,11 @@ pub async fn run_main(
         None => AbsolutePathBuf::current_dir()?,
     };
 
-    let config_toml = match load_config_as_toml_with_cli_overrides(
+    let config_toml = match load_config_as_toml_with_cli_overrides_and_loader_overrides(
         &codex_home,
         &config_cwd,
         cli_kv_overrides.clone(),
+        loader_overrides.clone(),
     )
     .await
     {
@@ -249,7 +261,12 @@ pub async fn run_main(
         ..Default::default()
     };
 
-    let config = load_config_or_exit(cli_kv_overrides.clone(), overrides.clone()).await;
+    let config = load_config_or_exit(
+        cli_kv_overrides.clone(),
+        overrides.clone(),
+        loader_overrides.clone(),
+    )
+    .await;
 
     if let Some(warning) = add_dir_warning_message(&cli.add_dir, config.sandbox_policy.get()) {
         let _ = writeln!(std::io::stderr(), "Error adding directories: {warning}");
@@ -347,9 +364,16 @@ pub async fn run_main(
         .with(otel_tracing_layer)
         .try_init();
 
-    run_ratatui_app(cli, config, overrides, cli_kv_overrides, feedback)
-        .await
-        .map_err(|err| std::io::Error::other(err.to_string()))
+    run_ratatui_app(
+        cli,
+        config,
+        overrides,
+        cli_kv_overrides,
+        loader_overrides,
+        feedback,
+    )
+    .await
+    .map_err(|err| std::io::Error::other(err.to_string()))
 }
 
 async fn run_ratatui_app(
@@ -357,6 +381,7 @@ async fn run_ratatui_app(
     initial_config: Config,
     overrides: ConfigOverrides,
     cli_kv_overrides: Vec<(String, toml::Value)>,
+    loader_overrides: LoaderOverrides,
     feedback: codex_feedback::CodexFeedback,
 ) -> color_eyre::Result<AppExitInfo> {
     color_eyre::install()?;
@@ -440,7 +465,12 @@ async fn run_ratatui_app(
             .map(|d| d == TrustDirectorySelection::Trust)
             .unwrap_or(false)
         {
-            load_config_or_exit(cli_kv_overrides.clone(), overrides.clone()).await
+            load_config_or_exit(
+                cli_kv_overrides.clone(),
+                overrides.clone(),
+                loader_overrides.clone(),
+            )
+            .await
         } else {
             initial_config
         }
@@ -591,6 +621,7 @@ async fn run_ratatui_app(
             load_config_or_exit_with_fallback_cwd(
                 cli_kv_overrides.clone(),
                 overrides.clone(),
+                loader_overrides.clone(),
                 history_cwd,
             )
             .await
@@ -709,18 +740,21 @@ fn get_login_status(config: &Config) -> LoginStatus {
 async fn load_config_or_exit(
     cli_kv_overrides: Vec<(String, toml::Value)>,
     overrides: ConfigOverrides,
+    loader_overrides: LoaderOverrides,
 ) -> Config {
-    load_config_or_exit_with_fallback_cwd(cli_kv_overrides, overrides, None).await
+    load_config_or_exit_with_fallback_cwd(cli_kv_overrides, overrides, loader_overrides, None).await
 }
 
 async fn load_config_or_exit_with_fallback_cwd(
     cli_kv_overrides: Vec<(String, toml::Value)>,
     overrides: ConfigOverrides,
+    loader_overrides: LoaderOverrides,
     fallback_cwd: Option<PathBuf>,
 ) -> Config {
     match ConfigBuilder::default()
         .cli_overrides(cli_kv_overrides)
         .harness_overrides(overrides)
+        .loader_overrides(loader_overrides)
         .fallback_cwd(fallback_cwd)
         .build()
         .await

@@ -21,6 +21,8 @@ pub struct LoaderOverrides {
     #[cfg(target_os = "macos")]
     pub managed_preferences_base64: Option<String>,
     pub macos_managed_config_requirements_base64: Option<String>,
+    pub skip_requirements: bool,
+    pub skip_managed_config_layers: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]

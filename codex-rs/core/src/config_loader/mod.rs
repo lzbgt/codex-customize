@@ -96,34 +96,47 @@ pub async fn load_config_layers_state(
     cli_overrides: &[(String, TomlValue)],
     overrides: LoaderOverrides,
 ) -> io::Result<ConfigLayerStack> {
+    let skip_requirements = overrides.skip_requirements;
+    let skip_managed_config_layers = overrides.skip_managed_config_layers;
     let mut config_requirements_toml = ConfigRequirementsWithSources::default();
 
-    #[cfg(target_os = "macos")]
-    macos::load_managed_admin_requirements_toml(
-        &mut config_requirements_toml,
-        overrides
-            .macos_managed_config_requirements_base64
-            .as_deref(),
-    )
-    .await?;
-
-    // Honor /etc/codex/requirements.toml.
-    if cfg!(unix) {
-        load_requirements_toml(
+    if !skip_requirements {
+        #[cfg(target_os = "macos")]
+        macos::load_managed_admin_requirements_toml(
             &mut config_requirements_toml,
-            DEFAULT_REQUIREMENTS_TOML_FILE_UNIX,
+            overrides
+                .macos_managed_config_requirements_base64
+                .as_deref(),
         )
         .await?;
+
+        // Honor /etc/codex/requirements.toml.
+        if cfg!(unix) {
+            load_requirements_toml(
+                &mut config_requirements_toml,
+                DEFAULT_REQUIREMENTS_TOML_FILE_UNIX,
+            )
+            .await?;
+        }
     }
 
     // Make a best-effort to support the legacy `managed_config.toml` as a
     // requirements specification.
-    let loaded_config_layers = layer_io::load_config_layers_internal(codex_home, overrides).await?;
-    load_requirements_from_legacy_scheme(
-        &mut config_requirements_toml,
-        loaded_config_layers.clone(),
-    )
-    .await?;
+    let loaded_config_layers = if skip_requirements && skip_managed_config_layers {
+        LoadedConfigLayers {
+            managed_config: None,
+            managed_config_from_mdm: None,
+        }
+    } else {
+        layer_io::load_config_layers_internal(codex_home, overrides).await?
+    };
+    if !skip_requirements {
+        load_requirements_from_legacy_scheme(
+            &mut config_requirements_toml,
+            loaded_config_layers.clone(),
+        )
+        .await?;
+    }
 
     let mut layers = Vec::<ConfigLayerEntry>::new();
 
@@ -245,28 +258,30 @@ pub async fn load_config_layers_state(
         managed_config,
         managed_config_from_mdm,
     } = loaded_config_layers;
-    if let Some(config) = managed_config {
-        let managed_parent = config.file.as_path().parent().ok_or_else(|| {
-            io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!(
-                    "Managed config file {} has no parent directory",
-                    config.file.as_path().display()
-                ),
-            )
-        })?;
-        let managed_config =
-            resolve_relative_paths_in_config_toml(config.managed_config, managed_parent)?;
-        layers.push(ConfigLayerEntry::new(
-            ConfigLayerSource::LegacyManagedConfigTomlFromFile { file: config.file },
-            managed_config,
-        ));
-    }
-    if let Some(config) = managed_config_from_mdm {
-        layers.push(ConfigLayerEntry::new(
-            ConfigLayerSource::LegacyManagedConfigTomlFromMdm,
-            config,
-        ));
+    if !skip_managed_config_layers {
+        if let Some(config) = managed_config {
+            let managed_parent = config.file.as_path().parent().ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!(
+                        "Managed config file {} has no parent directory",
+                        config.file.as_path().display()
+                    ),
+                )
+            })?;
+            let managed_config =
+                resolve_relative_paths_in_config_toml(config.managed_config, managed_parent)?;
+            layers.push(ConfigLayerEntry::new(
+                ConfigLayerSource::LegacyManagedConfigTomlFromFile { file: config.file },
+                managed_config,
+            ));
+        }
+        if let Some(config) = managed_config_from_mdm {
+            layers.push(ConfigLayerEntry::new(
+                ConfigLayerSource::LegacyManagedConfigTomlFromMdm,
+                config,
+            ));
+        }
     }
 
     ConfigLayerStack::new(

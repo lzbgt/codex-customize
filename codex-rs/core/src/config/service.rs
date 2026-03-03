@@ -812,6 +812,7 @@ remote_compaction = true
                 #[cfg(target_os = "macos")]
                 managed_preferences_base64: None,
                 macos_managed_config_requirements_base64: None,
+                ..Default::default()
             },
         );
 
@@ -894,6 +895,7 @@ remote_compaction = true
                 #[cfg(target_os = "macos")]
                 managed_preferences_base64: None,
                 macos_managed_config_requirements_base64: None,
+                ..Default::default()
             },
         );
 
@@ -998,6 +1000,7 @@ remote_compaction = true
                 #[cfg(target_os = "macos")]
                 managed_preferences_base64: None,
                 macos_managed_config_requirements_base64: None,
+                ..Default::default()
             },
         );
 
@@ -1046,6 +1049,7 @@ remote_compaction = true
                 #[cfg(target_os = "macos")]
                 managed_preferences_base64: None,
                 macos_managed_config_requirements_base64: None,
+                ..Default::default()
             },
         );
 
@@ -1093,6 +1097,7 @@ remote_compaction = true
                 #[cfg(target_os = "macos")]
                 managed_preferences_base64: None,
                 macos_managed_config_requirements_base64: None,
+                ..Default::default()
             },
         );
 

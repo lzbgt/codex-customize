@@ -26,11 +26,13 @@ use codex_core::OLLAMA_OSS_PROVIDER_ID;
 use codex_core::ThreadManager;
 use codex_core::auth::enforce_login_restrictions;
 use codex_core::config::Config;
+use codex_core::config::ConfigBuilder;
 use codex_core::config::ConfigOverrides;
 use codex_core::config::find_codex_home;
-use codex_core::config::load_config_as_toml_with_cli_overrides;
+use codex_core::config::load_config_as_toml_with_cli_overrides_and_loader_overrides;
 use codex_core::config::resolve_oss_provider;
 use codex_core::config_loader::ConfigLoadError;
+use codex_core::config_loader::LoaderOverrides;
 use codex_core::config_loader::format_config_error_with_source;
 use codex_core::git_info::get_git_repo_root;
 use codex_core::models_manager::manager::RefreshStrategy;
@@ -129,6 +131,15 @@ pub async fn run_main(cli: Cli, codex_linux_sandbox_exe: Option<PathBuf>) -> any
     } else {
         sandbox_mode_cli_arg.map(Into::<SandboxMode>::into)
     };
+    let loader_overrides = if dangerously_bypass_approvals_and_sandbox {
+        LoaderOverrides {
+            skip_requirements: true,
+            skip_managed_config_layers: true,
+            ..Default::default()
+        }
+    } else {
+        LoaderOverrides::default()
+    };
 
     // Parse `-c` overrides from the CLI.
     let cli_kv_overrides = match config_overrides.parse_overrides() {
@@ -157,10 +168,11 @@ pub async fn run_main(cli: Cli, codex_linux_sandbox_exe: Option<PathBuf>) -> any
             }
         };
 
-        match load_config_as_toml_with_cli_overrides(
+        match load_config_as_toml_with_cli_overrides_and_loader_overrides(
             &codex_home,
             &config_cwd,
             cli_kv_overrides.clone(),
+            loader_overrides.clone(),
         )
         .await
         {
@@ -234,8 +246,12 @@ pub async fn run_main(cli: Cli, codex_linux_sandbox_exe: Option<PathBuf>) -> any
         additional_writable_roots: add_dir,
     };
 
-    let config =
-        Config::load_with_cli_overrides_and_harness_overrides(cli_kv_overrides, overrides).await?;
+    let config = ConfigBuilder::default()
+        .cli_overrides(cli_kv_overrides)
+        .harness_overrides(overrides)
+        .loader_overrides(loader_overrides)
+        .build()
+        .await?;
 
     if let Err(err) = enforce_login_restrictions(&config) {
         safe_eprintln!("{err}");
