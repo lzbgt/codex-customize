@@ -93,7 +93,7 @@ Continue.\n\
 Priority:\n\
 1) If the most recent user message contains explicit tasks/questions, execute those first (avoid repeating generic process boilerplate).\n\
 2) Else if the most recent assistant message ended with choices/options:\n\
-   - Pick the single best default option using future-proof engineering judgement (SOLID, low maintenance, robust, efficient).\n\
+   - Options may be compatible; prefer a best default, but take multiple if they are non-conflicting and increase leverage.\n\
    - Prefer reversible/low-risk moves when uncertainty is high.\n\
    - Ask a clarifying question only if the choice materially affects correctness, data loss, security, or long-term architecture.\n\
    - If you do ask, ask exactly one tight question and propose a default you will proceed with if unanswered.\n\
