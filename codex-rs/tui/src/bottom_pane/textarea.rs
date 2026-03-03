@@ -891,6 +891,10 @@ impl TextArea {
         self.set_cursor(end);
     }
 
+    pub fn insert_named_element(&mut self, text: &str, _id: String) {
+        self.insert_element(text);
+    }
+
     fn add_element(&mut self, range: Range<usize>) {
         let elem = TextElement { range };
         self.elements.push(elem);

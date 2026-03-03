@@ -159,6 +159,9 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 use std::time::Instant;
 
@@ -211,6 +214,25 @@ enum PromptSelectionAction {
     },
 }
 
+#[derive(Default)]
+struct VoiceState {
+    transcription_enabled: bool,
+    space_hold_started_at: Option<Instant>,
+    space_hold_element_id: Option<String>,
+    space_hold_trigger: Option<Arc<AtomicBool>>,
+    key_release_supported: bool,
+    space_hold_repeat_seen: bool,
+}
+
+impl VoiceState {
+    fn new(key_release_supported: bool) -> Self {
+        Self {
+            key_release_supported,
+            ..Default::default()
+        }
+    }
+}
+
 pub(crate) struct ChatComposer {
     textarea: TextArea,
     textarea_state: RefCell<TextAreaState>,
@@ -229,6 +251,8 @@ pub(crate) struct ChatComposer {
     /// Invariant: attached images are labeled `[Image #1]..[Image #N]` in vec order.
     attached_images: Vec<AttachedImage>,
     placeholder_text: String,
+    voice_state: VoiceState,
+    spinner_stop_flags: HashMap<String, Arc<AtomicBool>>,
     is_task_running: bool,
     /// When false, the composer is temporarily read-only (e.g. during sandbox setup).
     input_enabled: bool,
@@ -296,6 +320,8 @@ impl ChatComposer {
             has_focus: has_input_focus,
             attached_images: Vec::new(),
             placeholder_text,
+            voice_state: VoiceState::new(enhanced_keys_supported),
+            spinner_stop_flags: HashMap::new(),
             is_task_running: false,
             input_enabled: true,
             input_disabled_placeholder: None,
@@ -492,6 +518,47 @@ impl ChatComposer {
         }
     }
 
+    pub(crate) fn set_voice_transcription_enabled(&mut self, enabled: bool) {
+        self.voice_state.transcription_enabled = enabled;
+        if enabled {
+            return;
+        }
+        self.voice_state.space_hold_started_at = None;
+        self.voice_state.space_hold_element_id = None;
+        self.voice_state.space_hold_trigger = None;
+        self.voice_state.space_hold_repeat_seen = false;
+    }
+
+    fn process_space_hold_trigger(&mut self) {
+        if self.voice_state.space_hold_started_at.is_none() {
+            return;
+        }
+        if self.voice_state.space_hold_repeat_seen {
+            let text = self.textarea.text();
+            if text.ends_with("  ") {
+                let trim_to = text.len().saturating_sub(1);
+                self.textarea.replace_range(trim_to..text.len(), "");
+            }
+        }
+        self.voice_state.space_hold_started_at = None;
+        self.voice_state.space_hold_element_id = None;
+        self.voice_state.space_hold_trigger = None;
+        self.voice_state.space_hold_repeat_seen = false;
+    }
+
+    fn is_recording(&self) -> bool {
+        false
+    }
+
+    fn stop_recording_and_start_transcription(&mut self) {}
+
+    fn replace_transcription(&mut self, id: &str, text: &str) {
+        if let Some(flag) = self.spinner_stop_flags.remove(id) {
+            flag.store(true, Ordering::Relaxed);
+        }
+        self.textarea.set_text_clearing_elements(text);
+    }
+
     /// Replace the composer content with text from an external editor.
     /// Clears pending paste placeholders and keeps only attachments whose
     /// placeholder labels still appear in the new text. Image placeholders
@@ -602,6 +669,9 @@ impl ChatComposer {
         text_elements: Vec<TextElement>,
         local_image_paths: Vec<PathBuf>,
     ) {
+        for (_id, flag) in self.spinner_stop_flags.drain() {
+            flag.store(true, Ordering::Relaxed);
+        }
         // Clear any existing content, placeholders, and attachments first.
         self.textarea.set_text_clearing_elements("");
         self.pending_pastes.clear();
@@ -639,6 +709,11 @@ impl ChatComposer {
     /// Get the current composer text.
     pub(crate) fn current_text(&self) -> String {
         self.textarea.text().to_string()
+    }
+
+    fn move_cursor_to_end(&mut self) {
+        let end = self.textarea.text().len();
+        self.textarea.set_cursor(end);
     }
 
     pub(crate) fn text_elements(&self) -> Vec<TextElement> {
@@ -799,6 +874,9 @@ impl ChatComposer {
     /// Handle a key event coming from the main UI.
     pub fn handle_key_event(&mut self, key_event: KeyEvent) -> (InputResult, bool) {
         if !self.input_enabled {
+            return (InputResult::None, false);
+        }
+        if matches!(key_event.kind, KeyEventKind::Release) {
             return (InputResult::None, false);
         }
 
@@ -1172,7 +1250,7 @@ impl ChatComposer {
                     return (InputResult::None, true);
                 };
 
-                let sel_path = sel.to_string();
+                let sel_path = sel;
                 // If selected path looks like an image (png/jpeg), attach as image instead of inserting text.
                 let is_image = Self::is_image_path(&sel_path);
                 if is_image {
@@ -1843,6 +1921,14 @@ impl ChatComposer {
                         .find(|(command_name, _)| *command_name == name)
                 && cmd == SlashCommand::Review
             {
+                if self.is_task_running && !cmd.available_during_task() {
+                    let command = cmd.command();
+                    let message = format!("'/{command}' is disabled while a task is in progress.");
+                    self.app_event_tx.send(AppEvent::InsertHistoryCell(Box::new(
+                        history_cell::new_error_event(message),
+                    )));
+                    return Some(InputResult::None);
+                }
                 self.textarea.set_text_clearing_elements("");
                 return Some(InputResult::CommandWithArgs(cmd, rest.to_string()));
             }
@@ -2623,7 +2709,7 @@ impl Renderable for ChatComposer {
                         | FooterMode::ShortcutOverlay
                         | FooterMode::EscHint => false,
                     };
-                let mut truncated_status_line = if status_line_candidate {
+                let mut truncated_status_line: Option<Line<'static>> = if status_line_candidate {
                     status_line.as_ref().map(|line| {
                         truncate_line_with_ellipsis_if_overflow(line.clone(), available_width)
                     })
@@ -4355,7 +4441,7 @@ mod tests {
         assert!(composer.voice_state.space_hold_started_at.is_none());
         assert!(!composer.voice_state.space_hold_repeat_seen);
         if composer.is_recording() {
-            let _ = composer.stop_recording_and_start_transcription();
+            composer.stop_recording_and_start_transcription();
         }
     }
 
@@ -4389,7 +4475,7 @@ mod tests {
         assert!(composer.voice_state.space_hold_started_at.is_none());
         assert!(!composer.voice_state.space_hold_repeat_seen);
         if composer.is_recording() {
-            let _ = composer.stop_recording_and_start_transcription();
+            composer.stop_recording_and_start_transcription();
         }
     }
 

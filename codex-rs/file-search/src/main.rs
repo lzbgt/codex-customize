@@ -39,7 +39,8 @@ impl Reporter for StdioReporter {
             // iterating over the characters.
             let mut indices_iter = indices.iter().peekable();
 
-            for (i, c) in file_match.path.chars().enumerate() {
+            let path = file_match.path.to_string_lossy();
+            for (i, c) in path.chars().enumerate() {
                 match indices_iter.peek() {
                     Some(next) if **next == i as u32 => {
                         // ANSI escape code for bold: \x1b[1m ... \x1b[0m
@@ -54,7 +55,7 @@ impl Reporter for StdioReporter {
             }
             println!();
         } else {
-            println!("{}", file_match.path);
+            println!("{}", file_match.path.display());
         }
     }
 

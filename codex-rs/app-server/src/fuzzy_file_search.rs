@@ -41,16 +41,14 @@ pub(crate) async fn run_fuzzy_file_search(
         let query = query.clone();
         let cancel_flag = cancellation_flag.clone();
         join_set.spawn_blocking(move || {
-            match file_search::run(
-                query.as_str(),
-                limit_per_root,
-                &search_dir,
-                Vec::new(),
+            let options = file_search::FileSearchOptions {
+                limit: limit_per_root,
+                exclude: Vec::new(),
                 threads,
-                cancel_flag,
-                COMPUTE_INDICES,
-                true,
-            ) {
+                compute_indices: COMPUTE_INDICES,
+                respect_gitignore: true,
+            };
+            match file_search::run(query.as_str(), vec![search_dir], options, Some(cancel_flag)) {
                 Ok(res) => Ok((root, res)),
                 Err(err) => Err((root, err)),
             }
@@ -61,7 +59,7 @@ pub(crate) async fn run_fuzzy_file_search(
         match res {
             Ok(Ok((root, res))) => {
                 for m in res.matches {
-                    let path = m.path;
+                    let path = m.path.to_string_lossy().into_owned();
                     let file_name = file_search::file_name_from_path(&path);
                     let result = FuzzyFileSearchResult {
                         root: root.clone(),

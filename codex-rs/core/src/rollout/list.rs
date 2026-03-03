@@ -1081,17 +1081,16 @@ pub async fn find_thread_path_by_id_str(
     let exclude: Vec<String> = Vec::new();
     let compute_indices = false;
 
-    let results = file_search::run(
-        id_str,
+    let options = file_search::FileSearchOptions {
         limit,
-        &root,
         exclude,
         threads,
-        cancel,
         compute_indices,
-        false,
-    )
-    .map_err(|e| io::Error::other(format!("file search failed: {e}")))?;
+        respect_gitignore: false,
+    };
+
+    let results = file_search::run(id_str, vec![root.clone()], options, Some(cancel))
+        .map_err(|e| io::Error::other(format!("file search failed: {e}")))?;
 
     Ok(results
         .matches

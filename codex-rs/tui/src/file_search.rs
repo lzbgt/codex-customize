@@ -164,15 +164,19 @@ impl FileSearchManager {
     ) {
         let compute_indices = true;
         std::thread::spawn(move || {
+            let options = file_search::FileSearchOptions {
+                limit: MAX_FILE_SEARCH_RESULTS,
+                exclude: Vec::new(),
+                threads: NUM_FILE_SEARCH_THREADS,
+                compute_indices,
+                respect_gitignore: true,
+            };
+
             let matches = file_search::run(
                 &query,
-                MAX_FILE_SEARCH_RESULTS,
-                &search_dir,
-                Vec::new(),
-                NUM_FILE_SEARCH_THREADS,
-                cancellation_token.clone(),
-                compute_indices,
-                true,
+                vec![search_dir],
+                options,
+                Some(cancellation_token.clone()),
             )
             .map(|res| res.matches)
             .unwrap_or_default();

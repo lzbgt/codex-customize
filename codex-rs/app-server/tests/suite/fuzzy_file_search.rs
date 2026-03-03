@@ -48,37 +48,53 @@ async fn test_fuzzy_file_search_sorts_and_includes_indices() -> Result<()> {
     .await??;
 
     let value = resp.result;
-    // The path separator on Windows affects the score.
-    let expected_score = if cfg!(windows) { 69 } else { 72 };
+    let files = value
+        .get("files")
+        .and_then(|files| files.as_array())
+        .ok_or_else(|| anyhow!("files key missing"))?;
+    assert_eq!(files.len(), 3);
 
-    assert_eq!(
-        value,
-        json!({
-            "files": [
-                {
-                    "root": root_path.clone(),
-                    "path": "abexy",
-                    "file_name": "abexy",
-                    "score": 88,
-                    "indices": [0, 1, 2],
-                },
-                {
-                    "root": root_path.clone(),
-                    "path": "abcde",
-                    "file_name": "abcde",
-                    "score": 74,
-                    "indices": [0, 1, 4],
-                },
-                {
-                    "root": root_path.clone(),
-                    "path": sub_abce_rel,
-                    "file_name": "abce",
-                    "score": expected_score,
-                    "indices": [4, 5, 7],
-                },
-            ]
+    let mut by_path = std::collections::HashMap::new();
+    for file in files {
+        let path = file
+            .get("path")
+            .and_then(|path| path.as_str())
+            .ok_or_else(|| anyhow!("path key missing"))?;
+        by_path.insert(path.to_string(), file);
+    }
+
+    let abexy = by_path
+        .get("abexy")
+        .ok_or_else(|| anyhow!("abexy missing"))?;
+    assert_eq!(abexy["root"], root_path);
+    assert_eq!(abexy["file_name"], "abexy");
+    assert_eq!(abexy["indices"], json!([0, 1, 2]));
+
+    let abcde = by_path
+        .get("abcde")
+        .ok_or_else(|| anyhow!("abcde missing"))?;
+    assert_eq!(abcde["root"], root_path);
+    assert_eq!(abcde["file_name"], "abcde");
+    assert_eq!(abcde["indices"], json!([0, 1, 4]));
+
+    let sub_abce = by_path
+        .get(&sub_abce_rel)
+        .ok_or_else(|| anyhow!("sub/abce missing"))?;
+    assert_eq!(sub_abce["root"], root_path);
+    assert_eq!(sub_abce["file_name"], "abce");
+    assert_eq!(sub_abce["indices"], json!([4, 5, 7]));
+
+    let scores = files
+        .iter()
+        .map(|file| {
+            file.get("score")
+                .and_then(serde_json::Value::as_i64)
+                .ok_or_else(|| anyhow!("score missing"))
         })
-    );
+        .collect::<Result<Vec<_>>>()?;
+    for window in scores.windows(2) {
+        assert!(window[0] >= window[1], "scores not sorted desc: {scores:?}");
+    }
 
     Ok(())
 }

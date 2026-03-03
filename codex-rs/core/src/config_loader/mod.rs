@@ -13,7 +13,6 @@ mod tests;
 
 use crate::config::CONFIG_TOML_FILE;
 use crate::config::ConfigToml;
-use crate::config::deserialize_config_toml_with_base;
 use crate::config_loader::config_requirements::ConfigRequirementsWithSources;
 use crate::config_loader::layer_io::LoadedConfigLayers;
 use crate::git_info::resolve_root_git_project_for_trust;
