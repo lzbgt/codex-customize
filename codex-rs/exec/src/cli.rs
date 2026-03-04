@@ -49,7 +49,9 @@ pub struct Cli {
     /// Skip all confirmation prompts, execute commands without sandboxing,
     /// bypass managed policy constraints, disable exec-policy enforcement, and
     /// force-enable unrestricted tool use (shell/unified_exec/apply_patch/view_image
-    /// plus live web_search) with full host/network access. EXTREMELY DANGEROUS.
+    /// plus live web_search) with full host/network access. Also resets the shell
+    /// environment policy to inherit all variables with default excludes disabled.
+    /// EXTREMELY DANGEROUS.
     /// Intended solely for running in environments that are externally sandboxed.
     #[arg(
         long = "dangerously-bypass-approvals-and-sandbox",

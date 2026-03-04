@@ -84,6 +84,8 @@ pub struct Cli {
     /// bypass managed policy constraints, disable exec-policy enforcement,
     /// force-enable unrestricted tool use (shell/unified_exec/apply_patch/view_image
     /// plus live web_search), allow full host/network access, and enable auto-continue.
+    /// Also resets the shell environment policy to inherit all variables with
+    /// default excludes disabled.
     /// EXTREMELY DANGEROUS. Intended solely for running in environments that
     /// are externally sandboxed.
     #[arg(
