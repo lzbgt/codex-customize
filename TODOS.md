@@ -49,6 +49,7 @@ This file tracks high-impact work items for this repo. Ordering is by priority (
 - Auto-continue follow-up prompt now treats "Continue" as approval for pending required steps.
 - Auto-continue approval semantics documented in README.
 - TUI auto-continue flag help and docs mention approval semantics and max-turns cap.
+- Added local build/install script for repeatable release builds, codesign, install, and cleanup.
 - YOLO now force-resets shell environment policy overrides to ensure full env inheritance.
 - YOLO CLI help text now mentions full env inheritance behavior.
 - Added EventBroker pause/resume/paused-duration stats and watchdog logging for hang triage.
