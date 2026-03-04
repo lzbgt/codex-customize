@@ -1178,6 +1178,8 @@ pub struct ConfigOverrides {
     pub tools_web_search_request: Option<bool>,
     /// Additional directories that should be treated as writable roots for this session.
     pub additional_writable_roots: Vec<PathBuf>,
+    /// Disable exec policy enforcement for this session.
+    pub disable_exec_policy: bool,
 }
 
 /// Resolves the OSS provider from CLI override, profile config, or global config.
@@ -1265,6 +1267,7 @@ impl Config {
             show_raw_agent_reasoning,
             tools_web_search_request: override_tools_web_search_request,
             additional_writable_roots,
+            disable_exec_policy,
         } = overrides;
 
         let active_profile_name = config_profile_key
@@ -1290,7 +1293,10 @@ impl Config {
             web_search_request: override_tools_web_search_request,
         };
 
-        let features = Features::from_config(&cfg, &config_profile, feature_overrides);
+        let mut features = Features::from_config(&cfg, &config_profile, feature_overrides);
+        if disable_exec_policy {
+            features.disable(Feature::ExecPolicy);
+        }
         let web_search_mode = resolve_web_search_mode(&cfg, &config_profile, &features);
         #[cfg(target_os = "windows")]
         {

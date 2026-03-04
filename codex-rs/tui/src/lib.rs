@@ -258,6 +258,7 @@ pub async fn run_main(
             .then_some(codex_core::auto_continue::AUTO_CONTINUE_DEVELOPER_INSTRUCTIONS.to_string()),
         show_raw_agent_reasoning: Some(true),
         additional_writable_roots: additional_dirs,
+        disable_exec_policy: cli.dangerously_bypass_approvals_and_sandbox,
         ..Default::default()
     };
 

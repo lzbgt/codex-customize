@@ -244,6 +244,7 @@ pub async fn run_main(cli: Cli, codex_linux_sandbox_exe: Option<PathBuf>) -> any
         show_raw_agent_reasoning: Some(true),
         tools_web_search_request: None,
         additional_writable_roots: add_dir,
+        disable_exec_policy: dangerously_bypass_approvals_and_sandbox,
     };
 
     let config = ConfigBuilder::default()
