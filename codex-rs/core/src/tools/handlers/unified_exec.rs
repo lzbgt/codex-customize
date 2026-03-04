@@ -138,7 +138,13 @@ impl ToolHandler for UnifiedExecHandler {
                     ..
                 } = args;
 
+                let sandbox_allows_escalation = matches!(
+                    context.turn.sandbox_policy,
+                    codex_protocol::protocol::SandboxPolicy::DangerFullAccess
+                        | codex_protocol::protocol::SandboxPolicy::ExternalSandbox { .. }
+                );
                 if sandbox_permissions.requires_escalated_permissions()
+                    && !sandbox_allows_escalation
                     && !matches!(
                         context.turn.approval_policy,
                         codex_protocol::protocol::AskForApproval::OnRequest

@@ -118,6 +118,13 @@ impl ExecPolicyManager {
         sandbox_policy: &SandboxPolicy,
         sandbox_permissions: SandboxPermissions,
     ) -> ExecApprovalRequirement {
+        if !features.enabled(Feature::ExecPolicy) {
+            return crate::tools::sandboxing::default_exec_approval_requirement(
+                approval_policy,
+                sandbox_policy,
+            );
+        }
+
         let exec_policy = self.current();
         let commands =
             parse_shell_lc_plain_commands(command).unwrap_or_else(|| vec![command.to_vec()]);
