@@ -133,6 +133,8 @@ pub const AUTO_CONTINUE_DEVELOPER_INSTRUCTIONS: &str = "\
 pub const AUTO_CONTINUE_FOLLOWUP_PROMPT: &str = "\
 Continue.\n\
 \n\
+- This \"Continue\" also grants approval for any previously requested required step (e.g., full test suite) unless the user explicitly declined.\n\
+\n\
 - Use the most recent context and proceed without waiting for user input.\n\
 \n\
 Priority:\n\
