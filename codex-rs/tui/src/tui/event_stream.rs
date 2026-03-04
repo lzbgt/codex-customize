@@ -20,6 +20,7 @@
 use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::OnceLock;
 use std::sync::TryLockError;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicU64;
@@ -39,6 +40,12 @@ use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
 
 use super::TuiEvent;
 
+fn monotonic_millis() -> u64 {
+    static START: OnceLock<Instant> = OnceLock::new();
+    let start = START.get_or_init(Instant::now);
+    start.elapsed().as_millis() as u64
+}
+
 /// Result type produced by an event source.
 pub type EventResult = std::io::Result<Event>;
 
@@ -57,6 +64,7 @@ pub struct EventBroker<S: EventSource = CrosstermEventSource> {
     resume_events_tx: watch::Sender<()>,
     stats: EventBrokerStats,
     polling_active: AtomicBool,
+    polling_active_since_ms: AtomicU64,
 }
 
 /// Tracks state of underlying [`EventSource`].
@@ -105,6 +113,7 @@ impl<S: EventSource + Default> EventBroker<S> {
             resume_events_tx,
             stats: EventBrokerStats::default(),
             polling_active: AtomicBool::new(false),
+            polling_active_since_ms: AtomicU64::new(0),
         }
     }
 
@@ -136,7 +145,14 @@ impl<S: EventSource + Default> EventBroker<S> {
     }
 
     pub fn drain_stats(&self) -> EventBrokerStatsSnapshot {
-        self.stats.snapshot_and_reset()
+        let mut snapshot = self.stats.snapshot_and_reset();
+        let since = self.polling_active_since_ms.load(Ordering::Acquire);
+        snapshot.polling_active_ms = if since == 0 {
+            0
+        } else {
+            monotonic_millis().saturating_sub(since)
+        };
+        snapshot
     }
 
     pub fn pause_for_cursor_query(&self) -> Option<EventBrokerPauseGuard<'_, S>> {
@@ -333,8 +349,14 @@ impl<S: EventSource + Default + Unpin> TuiEventStream<S> {
                 drop(state);
 
                 self.broker.polling_active.store(true, Ordering::Release);
+                self.broker
+                    .polling_active_since_ms
+                    .store(monotonic_millis(), Ordering::Release);
                 let poll_result = Pin::new(&mut events).poll_next(cx);
                 self.broker.polling_active.store(false, Ordering::Release);
+                self.broker
+                    .polling_active_since_ms
+                    .store(0, Ordering::Release);
 
                 let should_restart =
                     matches!(poll_result, Poll::Ready(Some(Err(_))) | Poll::Ready(None));
@@ -816,6 +838,7 @@ pub struct EventBrokerStatsSnapshot {
     pub restarts: u64,
     pub cursor_query_paused: u64,
     pub cursor_query_skipped: u64,
+    pub polling_active_ms: u64,
 }
 
 impl EventBrokerStats {
@@ -826,6 +849,7 @@ impl EventBrokerStats {
             restarts: self.restarts.swap(0, Ordering::Relaxed),
             cursor_query_paused: self.cursor_query_paused.swap(0, Ordering::Relaxed),
             cursor_query_skipped: self.cursor_query_skipped.swap(0, Ordering::Relaxed),
+            polling_active_ms: 0,
         }
     }
 }

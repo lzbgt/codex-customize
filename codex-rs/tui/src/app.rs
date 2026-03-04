@@ -867,6 +867,7 @@ impl App {
                     restarts = stats.restarts,
                     cursor_query_paused = stats.cursor_query_paused,
                     cursor_query_skipped = stats.cursor_query_skipped,
+                    polling_active_ms = stats.polling_active_ms,
                     active_buffer_len,
                     buffered_events_total,
                     buffer_sampled,
