@@ -45,3 +45,4 @@ This file tracks high-impact work items for this repo. Ordering is by priority (
 - Auto-continue prompts now enforce 3+ tasks per turn and explicit scope expansion into tests/docs when needed.
 - Added EventBroker pause/resume/paused-duration stats and watchdog logging for hang triage.
 - Added macOS hang capture helper, SIGUSR1 diagnostics, and TUI hang debugging doc.
+- Honored `tools.view_image`/profile overrides by gating the tool registry, with coverage tests.

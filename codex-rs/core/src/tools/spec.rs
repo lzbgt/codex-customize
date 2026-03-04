@@ -26,6 +26,7 @@ pub(crate) struct ToolsConfig {
     pub shell_type: ConfigShellToolType,
     pub apply_patch_tool_type: Option<ApplyPatchToolType>,
     pub web_search_mode: Option<WebSearchMode>,
+    pub view_image_enabled: bool,
     pub collab_tools: bool,
     pub collaboration_modes_tools: bool,
     pub experimental_supported_tools: Vec<String>,
@@ -35,6 +36,7 @@ pub(crate) struct ToolsConfigParams<'a> {
     pub(crate) model_info: &'a ModelInfo,
     pub(crate) features: &'a Features,
     pub(crate) web_search_mode: Option<WebSearchMode>,
+    pub(crate) view_image_enabled: bool,
 }
 
 impl ToolsConfig {
@@ -43,6 +45,7 @@ impl ToolsConfig {
             model_info,
             features,
             web_search_mode,
+            view_image_enabled,
         } = params;
         let include_apply_patch_tool = features.enabled(Feature::ApplyPatchFreeform);
         let include_collab_tools = features.enabled(Feature::Collab);
@@ -77,6 +80,7 @@ impl ToolsConfig {
             shell_type,
             apply_patch_tool_type,
             web_search_mode: *web_search_mode,
+            view_image_enabled: *view_image_enabled,
             collab_tools: include_collab_tools,
             collaboration_modes_tools: include_collaboration_modes_tools,
             experimental_supported_tools: model_info.experimental_supported_tools.clone(),
@@ -1352,8 +1356,10 @@ pub(crate) fn build_specs(
         Some(WebSearchMode::Disabled) | None => {}
     }
 
-    builder.push_spec_with_parallel_support(create_view_image_tool(), true);
-    builder.register_handler("view_image", view_image_handler);
+    if config.view_image_enabled {
+        builder.push_spec_with_parallel_support(create_view_image_tool(), true);
+        builder.register_handler("view_image", view_image_handler);
+    }
 
     if config.collab_tools {
         let collab_handler = Arc::new(CollabHandler);
@@ -1495,6 +1501,7 @@ mod tests {
             model_info: &model_info,
             features: &features,
             web_search_mode: Some(WebSearchMode::Live),
+            view_image_enabled: true,
         });
         let (tools, _) = build_specs(&config, None).build();
 
@@ -1559,6 +1566,7 @@ mod tests {
             model_info: &model_info,
             features: &features,
             web_search_mode: Some(WebSearchMode::Cached),
+            view_image_enabled: true,
         });
         let (tools, _) = build_specs(&tools_config, None).build();
         assert_contains_tool_names(
@@ -1577,6 +1585,7 @@ mod tests {
             model_info: &model_info,
             features: &features,
             web_search_mode: Some(WebSearchMode::Cached),
+            view_image_enabled: true,
         });
         let (tools, _) = build_specs(&tools_config, None).build();
         assert!(
@@ -1589,6 +1598,7 @@ mod tests {
             model_info: &model_info,
             features: &features,
             web_search_mode: Some(WebSearchMode::Cached),
+            view_image_enabled: true,
         });
         let (tools, _) = build_specs(&tools_config, None).build();
         assert_contains_tool_names(&tools, &["request_user_input"]);
@@ -1606,6 +1616,7 @@ mod tests {
             model_info: &model_info,
             features,
             web_search_mode,
+            view_image_enabled: true,
         });
         let (tools, _) = build_specs(&tools_config, Some(HashMap::new())).build();
         let tool_names = tools.iter().map(|t| t.spec.name()).collect::<Vec<_>>();
@@ -1622,6 +1633,7 @@ mod tests {
             model_info: &model_info,
             features: &features,
             web_search_mode: Some(WebSearchMode::Cached),
+            view_image_enabled: true,
         });
         let (tools, _) = build_specs(&tools_config, None).build();
 
@@ -1644,6 +1656,7 @@ mod tests {
             model_info: &model_info,
             features: &features,
             web_search_mode: Some(WebSearchMode::Live),
+            view_image_enabled: true,
         });
         let (tools, _) = build_specs(&tools_config, None).build();
 
@@ -1653,6 +1666,26 @@ mod tests {
             ToolSpec::WebSearch {
                 external_web_access: Some(true),
             }
+        );
+    }
+
+    #[test]
+    fn view_image_disabled_removes_tool() {
+        let config = test_config();
+        let model_info = ModelsManager::construct_model_info_offline("gpt-5-codex", &config);
+        let features = Features::with_defaults();
+
+        let tools_config = ToolsConfig::new(&ToolsConfigParams {
+            model_info: &model_info,
+            features: &features,
+            web_search_mode: Some(WebSearchMode::Cached),
+            view_image_enabled: false,
+        });
+        let (tools, _) = build_specs(&tools_config, None).build();
+
+        assert!(
+            !tools.iter().any(|tool| tool.spec.name() == "view_image"),
+            "view_image should be absent when disabled"
         );
     }
 
@@ -1890,6 +1923,7 @@ mod tests {
             model_info: &model_info,
             features: &features,
             web_search_mode: Some(WebSearchMode::Live),
+            view_image_enabled: true,
         });
         let (tools, _) = build_specs(&tools_config, Some(HashMap::new())).build();
 
@@ -1912,6 +1946,7 @@ mod tests {
             model_info: &model_info,
             features: &features,
             web_search_mode: Some(WebSearchMode::Cached),
+            view_image_enabled: true,
         });
         let (tools, _) = build_specs(&tools_config, None).build();
 
@@ -1931,6 +1966,7 @@ mod tests {
             model_info: &model_info,
             features: &features,
             web_search_mode: Some(WebSearchMode::Cached),
+            view_image_enabled: true,
         });
         let (tools, _) = build_specs(&tools_config, None).build();
 
@@ -1962,6 +1998,7 @@ mod tests {
             model_info: &model_info,
             features: &features,
             web_search_mode: Some(WebSearchMode::Live),
+            view_image_enabled: true,
         });
         let (tools, _) = build_specs(
             &tools_config,
@@ -2057,6 +2094,7 @@ mod tests {
             model_info: &model_info,
             features: &features,
             web_search_mode: Some(WebSearchMode::Cached),
+            view_image_enabled: true,
         });
 
         // Intentionally construct a map with keys that would sort alphabetically.
@@ -2134,6 +2172,7 @@ mod tests {
             model_info: &model_info,
             features: &features,
             web_search_mode: Some(WebSearchMode::Cached),
+            view_image_enabled: true,
         });
 
         let (tools, _) = build_specs(
@@ -2191,6 +2230,7 @@ mod tests {
             model_info: &model_info,
             features: &features,
             web_search_mode: Some(WebSearchMode::Cached),
+            view_image_enabled: true,
         });
 
         let (tools, _) = build_specs(
@@ -2245,6 +2285,7 @@ mod tests {
             model_info: &model_info,
             features: &features,
             web_search_mode: Some(WebSearchMode::Cached),
+            view_image_enabled: true,
         });
 
         let (tools, _) = build_specs(
@@ -2301,6 +2342,7 @@ mod tests {
             model_info: &model_info,
             features: &features,
             web_search_mode: Some(WebSearchMode::Cached),
+            view_image_enabled: true,
         });
 
         let (tools, _) = build_specs(
@@ -2413,6 +2455,7 @@ Examples of valid command strings:
             model_info: &model_info,
             features: &features,
             web_search_mode: Some(WebSearchMode::Cached),
+            view_image_enabled: true,
         });
         let (tools, _) = build_specs(
             &tools_config,

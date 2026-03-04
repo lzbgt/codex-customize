@@ -582,6 +582,7 @@ impl Session {
             model_info: &model_info,
             features: &per_turn_config.features,
             web_search_mode: per_turn_config.web_search_mode,
+            view_image_enabled: per_turn_config.view_image_enabled,
         });
 
         TurnContext {
@@ -2785,6 +2786,7 @@ async fn spawn_review_thread(
         model_info: &review_model_info,
         features: &review_features,
         web_search_mode: review_web_search_mode,
+        view_image_enabled: config.view_image_enabled,
     });
 
     let review_prompt = resolved.prompt.clone();

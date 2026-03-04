@@ -304,6 +304,9 @@ pub struct Config {
     /// model info's default preference.
     pub include_apply_patch_tool: bool,
 
+    /// When `false`, hides the `view_image` tool from the model.
+    pub view_image_enabled: bool,
+
     /// Explicit or feature-derived web search mode.
     pub web_search_mode: Option<WebSearchMode>,
 
@@ -1178,6 +1181,7 @@ pub struct ConfigOverrides {
     pub include_apply_patch_tool: Option<bool>,
     pub show_raw_agent_reasoning: Option<bool>,
     pub tools_web_search_request: Option<bool>,
+    pub tools_view_image: Option<bool>,
     /// Additional directories that should be treated as writable roots for this session.
     pub additional_writable_roots: Vec<PathBuf>,
     /// Disable exec policy enforcement for this session.
@@ -1268,6 +1272,7 @@ impl Config {
             include_apply_patch_tool: include_apply_patch_tool_override,
             show_raw_agent_reasoning,
             tools_web_search_request: override_tools_web_search_request,
+            tools_view_image: override_tools_view_image,
             additional_writable_roots,
             disable_exec_policy,
         } = overrides;
@@ -1437,6 +1442,10 @@ impl Config {
         };
 
         let include_apply_patch_tool_flag = features.enabled(Feature::ApplyPatchFreeform);
+        let view_image_enabled = override_tools_view_image
+            .or(config_profile.tools_view_image)
+            .or(cfg.tools.as_ref().and_then(|t| t.view_image))
+            .unwrap_or(true);
         let use_experimental_unified_exec_tool = features.enabled(Feature::UnifiedExec);
 
         let forced_chatgpt_workspace_id =
@@ -1580,6 +1589,7 @@ impl Config {
             forced_chatgpt_workspace_id,
             forced_login_method,
             include_apply_patch_tool: include_apply_patch_tool_flag,
+            view_image_enabled,
             web_search_mode,
             use_experimental_unified_exec_tool,
             ghost_snapshot,
@@ -2513,6 +2523,28 @@ profile = "project"
 
         assert!(!config.features.enabled(Feature::ApplyPatchFreeform));
         assert!(!config.include_apply_patch_tool);
+
+        Ok(())
+    }
+
+    #[test]
+    fn tools_view_image_respects_config() -> std::io::Result<()> {
+        let codex_home = TempDir::new()?;
+        let cfg = ConfigToml {
+            tools: Some(ToolsToml {
+                view_image: Some(false),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        let config = Config::load_from_base_config_with_overrides(
+            cfg,
+            ConfigOverrides::default(),
+            codex_home.path().to_path_buf(),
+        )?;
+
+        assert!(!config.view_image_enabled);
 
         Ok(())
     }
@@ -3765,6 +3797,7 @@ model_verbosity = "high"
                 forced_chatgpt_workspace_id: None,
                 forced_login_method: None,
                 include_apply_patch_tool: false,
+                view_image_enabled: true,
                 web_search_mode: None,
                 use_experimental_unified_exec_tool: false,
                 ghost_snapshot: GhostSnapshotConfig::default(),
@@ -3847,6 +3880,7 @@ model_verbosity = "high"
             forced_chatgpt_workspace_id: None,
             forced_login_method: None,
             include_apply_patch_tool: false,
+            view_image_enabled: true,
             web_search_mode: None,
             use_experimental_unified_exec_tool: false,
             ghost_snapshot: GhostSnapshotConfig::default(),
@@ -3944,6 +3978,7 @@ model_verbosity = "high"
             forced_chatgpt_workspace_id: None,
             forced_login_method: None,
             include_apply_patch_tool: false,
+            view_image_enabled: true,
             web_search_mode: None,
             use_experimental_unified_exec_tool: false,
             ghost_snapshot: GhostSnapshotConfig::default(),
@@ -4027,6 +4062,7 @@ model_verbosity = "high"
             forced_chatgpt_workspace_id: None,
             forced_login_method: None,
             include_apply_patch_tool: false,
+            view_image_enabled: true,
             web_search_mode: None,
             use_experimental_unified_exec_tool: false,
             ghost_snapshot: GhostSnapshotConfig::default(),
