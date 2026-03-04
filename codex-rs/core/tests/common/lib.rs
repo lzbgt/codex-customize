@@ -247,7 +247,27 @@ pub fn format_with_current_shell_display_non_login(command: &str) -> String {
 }
 
 pub fn stdio_server_bin() -> Result<String, CargoBinError> {
-    codex_utils_cargo_bin::cargo_bin("test_stdio_server").map(|p| p.to_string_lossy().to_string())
+    match codex_utils_cargo_bin::cargo_bin("test_stdio_server") {
+        Ok(path) => Ok(path.to_string_lossy().to_string()),
+        Err(err) => {
+            let build_ok = std::process::Command::new("cargo")
+                .args([
+                    "build",
+                    "-p",
+                    "codex-rmcp-client",
+                    "--bin",
+                    "test_stdio_server",
+                ])
+                .status()
+                .is_ok_and(|status| status.success());
+            if build_ok {
+                codex_utils_cargo_bin::cargo_bin("test_stdio_server")
+                    .map(|path| path.to_string_lossy().to_string())
+            } else {
+                Err(err)
+            }
+        }
+    }
 }
 
 pub mod fs_wait {
