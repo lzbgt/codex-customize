@@ -262,7 +262,6 @@ pub async fn run_main(
         additional_writable_roots: additional_dirs,
         disable_exec_policy: cli.dangerously_bypass_approvals_and_sandbox,
         include_apply_patch_tool: cli.dangerously_bypass_approvals_and_sandbox.then_some(true),
-        tools_web_search_request: cli.dangerously_bypass_approvals_and_sandbox.then_some(true),
         tools_view_image: cli.dangerously_bypass_approvals_and_sandbox.then_some(true),
         ..Default::default()
     };

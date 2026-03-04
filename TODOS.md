@@ -54,6 +54,8 @@ This file tracks high-impact work items for this repo. Ordering is by priority (
 - Added `just build-install-local` target for repeatable local build/install.
 - YOLO now force-resets shell environment policy overrides to ensure full env inheritance.
 - YOLO CLI help text now mentions full env inheritance behavior.
+- Auto-continue guidance now targets 8+ tasks per turn and at least two substantial deliverables.
+- Removed legacy web_search override usage in exec/tui; clarified deprecation docs and SDK comment.
 - Added EventBroker pause/resume/paused-duration stats and watchdog logging for hang triage.
 - Added macOS hang capture helper, SIGUSR1 diagnostics, and TUI hang debugging doc.
 - Honored `tools.view_image`/profile overrides by gating the tool registry, with coverage tests.
