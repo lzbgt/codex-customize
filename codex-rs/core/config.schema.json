@@ -936,6 +936,7 @@
         },
         "web_search": {
           "default": null,
+          "description": "Deprecated: use top-level `web_search = \"live|cached|disabled\"` or `[features].web_search_request = true`.",
           "type": "boolean"
         }
       },

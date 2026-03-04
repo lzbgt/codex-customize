@@ -1013,6 +1013,8 @@ impl ProjectConfig {
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, JsonSchema)]
 #[schemars(deny_unknown_fields)]
 pub struct ToolsToml {
+    /// Deprecated: use top-level `web_search = "live|cached|disabled"` or
+    /// `[features].web_search_request = true`.
     #[serde(default, alias = "web_search_request")]
     pub web_search: Option<bool>,
 

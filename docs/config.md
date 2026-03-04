@@ -28,6 +28,14 @@ Codex can run a notification hook when the agent finishes a turn. See the config
 
 The generated JSON Schema for `config.toml` lives at `codex-rs/core/config.schema.json`.
 
+## Legacy keys
+
+Some legacy config keys are still accepted for compatibility but are deprecated:
+
+- `[tools].web_search` and `web_search_request` (alias) are deprecated. Prefer the top-level
+  `web_search = "disabled" | "cached" | "live"` mode, or set `[features].web_search_request = true`
+  if you need the raw tool toggle.
+
 ## Notices
 
 Codex stores "do not show again" flags for some UI prompts under the `[notice]` table.

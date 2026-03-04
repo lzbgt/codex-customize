@@ -468,6 +468,12 @@ async fn includes_base_instructions_override_in_request() {
             .unwrap()
             .contains("test instructions")
     );
+    assert!(
+        !request_body["instructions"]
+            .as_str()
+            .unwrap()
+            .contains("Throughput and batching")
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
