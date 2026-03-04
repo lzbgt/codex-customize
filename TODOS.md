@@ -41,3 +41,5 @@ This file tracks high-impact work items for this repo. Ordering is by priority (
 - Avoid blocking the runtime on the event broker lock (use try_lock in poll).
 - Release broker lock while polling the event source (avoid pause/resume lock contention).
 - Built, codesigned, and installed macOS `codex` + `apply_patch` (Homebrew prefix), and produced versioned Linux x64 + Windows x64 zip artifacts in `dist/`.
+- YOLO now hard-enables apply_patch + web_search via overrides (no legacy warnings) and carries explicit full-access help text.
+- Auto-continue prompts now require dense multi-task turns rather than single small fixes.

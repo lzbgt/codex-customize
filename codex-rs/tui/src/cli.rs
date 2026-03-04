@@ -83,7 +83,7 @@ pub struct Cli {
     /// Skip all confirmation prompts, execute commands without sandboxing,
     /// bypass managed policy constraints, disable exec-policy enforcement,
     /// force-enable unrestricted tool use (shell/apply_patch/web_search with
-    /// live web search), and enable auto-continue.
+    /// live web search), allow full host/network access, and enable auto-continue.
     /// EXTREMELY DANGEROUS. Intended solely for running in environments that
     /// are externally sandboxed.
     #[arg(

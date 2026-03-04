@@ -270,8 +270,8 @@ pub async fn run_main(
         show_raw_agent_reasoning: Some(true),
         additional_writable_roots: additional_dirs,
         disable_exec_policy: cli.dangerously_bypass_approvals_and_sandbox,
-        include_apply_patch_tool: None,
-        tools_web_search_request: None,
+        include_apply_patch_tool: cli.dangerously_bypass_approvals_and_sandbox.then_some(true),
+        tools_web_search_request: cli.dangerously_bypass_approvals_and_sandbox.then_some(true),
         ..Default::default()
     };
 

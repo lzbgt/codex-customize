@@ -153,12 +153,20 @@ pub struct FeatureOverrides {
 
 impl FeatureOverrides {
     fn apply(self, features: &mut Features) {
-        LegacyFeatureToggles {
-            include_apply_patch_tool: self.include_apply_patch_tool,
-            tools_web_search: self.web_search_request,
-            ..Default::default()
+        if let Some(enabled) = self.include_apply_patch_tool {
+            if enabled {
+                features.enable(Feature::ApplyPatchFreeform);
+            } else {
+                features.disable(Feature::ApplyPatchFreeform);
+            }
         }
-        .apply(features);
+        if let Some(enabled) = self.web_search_request {
+            if enabled {
+                features.enable(Feature::WebSearchRequest);
+            } else {
+                features.disable(Feature::WebSearchRequest);
+            }
+        }
     }
 }
 

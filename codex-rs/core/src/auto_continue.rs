@@ -113,7 +113,8 @@ pub const AUTO_CONTINUE_DEVELOPER_INSTRUCTIONS: &str = "\
 - If the previous turn surfaced important proposals/next steps, prioritize the most beneficial one first, then keep going with other high-leverage items while context is fresh.\n\
 - Use the planning tool (`update_plan`) actively: create a macro plan early, refine into micro-steps, and use multiple plans per turn when it improves throughput (finish one plan, then start the next).\n\
 - When multiple tasks remain, prefer batching several into one coherent patch while context is fresh. Aim for substantial progress (often hundreds to ~1000+ lines across code + docs) rather than stopping after tiny edits. Do not inflate line count with churn—make meaningful changes.\n\
-- Implement as many tasks as possible in this turn.\n\
+- Make each turn dense: complete a cluster of related tasks (prefer 3–7) including implementation + tests + docs + verification; avoid one-off micro fixes.\n\
+- Implement as many tasks as possible in this turn, and if you finish early, immediately continue with the next highest‑leverage items instead of stopping.\n\
 - Before ending the turn:\n\
   a. If new task(s) are identified, capture them in the repo’s task tracker (if any).\n\
   b. Reweight and update tasks in the tracker, keeping it succinct.\n\
@@ -146,6 +147,7 @@ Execution style:\n\
 - Prefer fundamental fixes over ad-hoc tweaks. Keep the implementation SOLID and future-proof (reduce coupling, improve boundaries, add tests that lock in behavior).\n\
 - Aim for substantial progress per turn; batch 2-6 related tasks when possible and avoid tiny tweaks.\n\
 - If you finish a small fix quickly, keep going and expand into adjacent tests/docs until you deliver a substantive slice.\n\
+- Deliver multiple substantial changes per turn (target 3–7 related tasks); do not stop after a single small change.\n\
 - Prioritize feature-completing work over maintenance unless maintenance unblocks features or mitigates P0/P1 risks.\n\
 - Assume full tool access. Do not claim network/git/tool execution is blocked by policy unless a tool call explicitly returns that error.\n\
 - Keep documentation and implementation in sync: when behavior/config/workflows change, update docs/READMEs/examples/help text so they remain correct.\n\

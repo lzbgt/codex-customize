@@ -858,8 +858,14 @@ impl App {
                 .is_none_or(|last| last.elapsed() > Duration::from_secs(30));
             if should_recover {
                 let stats = tui.drain_event_stats();
-                let (active_buffer_len, buffered_events_total, buffer_sampled, buffer_contended) =
-                    self.thread_event_backlog_stats();
+                let (
+                    active_buffer_len,
+                    buffered_events_total,
+                    buffer_sampled,
+                    buffer_contended,
+                    channel_count,
+                    active_rx_present,
+                ) = self.thread_event_backlog_stats();
                 tracing::warn!(
                     elapsed_ms = elapsed.as_millis(),
                     lock_contended = stats.lock_contended,
@@ -872,6 +878,9 @@ impl App {
                     buffered_events_total,
                     buffer_sampled,
                     buffer_contended,
+                    channel_count,
+                    active_rx_present,
+                    active_thread_id = ?self.active_thread_id,
                     "ui watchdog restarting event stream after prolonged idle"
                 );
                 self.last_watchdog_recovery_at = Some(Instant::now());
@@ -882,10 +891,12 @@ impl App {
         }
     }
 
-    fn thread_event_backlog_stats(&self) -> (Option<usize>, usize, usize, usize) {
+    fn thread_event_backlog_stats(&self) -> (Option<usize>, usize, usize, usize, usize, bool) {
         let mut buffered_events_total = 0;
         let mut buffer_sampled = 0;
         let mut buffer_contended = 0;
+        let channel_count = self.thread_event_channels.len();
+        let active_rx_present = self.active_thread_rx.is_some();
 
         let active_buffer_len = self.active_thread_id.and_then(|thread_id| {
             self.thread_event_channels
@@ -916,6 +927,8 @@ impl App {
             buffered_events_total,
             buffer_sampled,
             buffer_contended,
+            channel_count,
+            active_rx_present,
         )
     }
 
