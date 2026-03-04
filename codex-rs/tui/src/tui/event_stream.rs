@@ -56,6 +56,7 @@ pub struct EventBroker<S: EventSource = CrosstermEventSource> {
     state: Mutex<EventBrokerState<S>>,
     resume_events_tx: watch::Sender<()>,
     stats: EventBrokerStats,
+    polling_active: AtomicBool,
 }
 
 /// Tracks state of underlying [`EventSource`].
@@ -103,6 +104,7 @@ impl<S: EventSource + Default> EventBroker<S> {
             state: Mutex::new(EventBrokerState::Start),
             resume_events_tx,
             stats: EventBrokerStats::default(),
+            polling_active: AtomicBool::new(false),
         }
     }
 
@@ -136,6 +138,34 @@ impl<S: EventSource + Default> EventBroker<S> {
     pub fn drain_stats(&self) -> EventBrokerStatsSnapshot {
         self.stats.snapshot_and_reset()
     }
+
+    pub fn pause_for_cursor_query(&self) -> Option<EventBrokerPauseGuard<'_, S>> {
+        if self.polling_active.load(Ordering::Acquire) {
+            return None;
+        }
+        let mut state = match self.state.try_lock() {
+            Ok(guard) => guard,
+            Err(TryLockError::Poisoned(guard)) => guard.into_inner(),
+            Err(TryLockError::WouldBlock) => {
+                self.stats.lock_contended.fetch_add(1, Ordering::Relaxed);
+                return None;
+            }
+        };
+        match &mut *state {
+            EventBrokerState::Paused => Some(EventBrokerPauseGuard::new(self, false)),
+            EventBrokerState::Start => {
+                *state = EventBrokerState::Paused;
+                Some(EventBrokerPauseGuard::new(self, true))
+            }
+            EventBrokerState::Running(event_state) => {
+                if event_state.polling {
+                    return None;
+                }
+                *state = EventBrokerState::Paused;
+                Some(EventBrokerPauseGuard::new(self, true))
+            }
+        }
+    }
 }
 
 impl<S: EventSource> EventBroker<S> {
@@ -146,6 +176,28 @@ impl<S: EventSource> EventBroker<S> {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         matches!(&*state, EventBrokerState::Paused)
+    }
+}
+
+pub(crate) struct EventBrokerPauseGuard<'a, S: EventSource + Default> {
+    broker: &'a EventBroker<S>,
+    resume_on_drop: bool,
+}
+
+impl<'a, S: EventSource + Default> EventBrokerPauseGuard<'a, S> {
+    fn new(broker: &'a EventBroker<S>, resume_on_drop: bool) -> Self {
+        Self {
+            broker,
+            resume_on_drop,
+        }
+    }
+}
+
+impl<S: EventSource + Default> Drop for EventBrokerPauseGuard<'_, S> {
+    fn drop(&mut self) {
+        if self.resume_on_drop {
+            self.broker.resume_events();
+        }
     }
 }
 
@@ -260,7 +312,9 @@ impl<S: EventSource + Default + Unpin> TuiEventStream<S> {
                 event_state.polling = true;
                 drop(state);
 
+                self.broker.polling_active.store(true, Ordering::Release);
                 let poll_result = Pin::new(&mut events).poll_next(cx);
+                self.broker.polling_active.store(false, Ordering::Release);
 
                 let should_restart =
                     matches!(poll_result, Poll::Ready(Some(Err(_))) | Poll::Ready(None));
@@ -417,6 +471,7 @@ mod tests {
     use crossterm::event::KeyModifiers;
     use pretty_assertions::assert_eq;
     use std::io;
+    use std::sync::atomic::Ordering;
     use std::task::Context;
     use std::task::Poll;
     use std::time::Duration;
@@ -682,6 +737,41 @@ mod tests {
 
         let stats = broker.drain_stats();
         assert!(stats.lock_contended > 0);
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn pause_for_cursor_query_pauses_and_resumes() {
+        let (broker, _handle, _draw_tx, _draw_rx, _terminal_focused) = setup();
+
+        assert!(!broker.is_paused());
+        {
+            let guard = broker.pause_for_cursor_query();
+            assert!(guard.is_some());
+            assert!(broker.is_paused());
+        }
+        assert!(!broker.is_paused());
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn pause_for_cursor_query_respects_existing_pause() {
+        let (broker, _handle, _draw_tx, _draw_rx, _terminal_focused) = setup();
+
+        broker.pause_events();
+        assert!(broker.is_paused());
+        {
+            let guard = broker.pause_for_cursor_query();
+            assert!(guard.is_some());
+            assert!(broker.is_paused());
+        }
+        assert!(broker.is_paused());
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn pause_for_cursor_query_skips_when_polling_active() {
+        let (broker, _handle, _draw_tx, _draw_rx, _terminal_focused) = setup();
+
+        broker.polling_active.store(true, Ordering::Release);
+        assert!(broker.pause_for_cursor_query().is_none());
     }
 }
 #[derive(Default)]

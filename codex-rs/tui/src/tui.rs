@@ -470,7 +470,9 @@ impl Tui {
         #[cfg(unix)]
         let mut prepared_resume = {
             let resume_cursor_pos = if self.event_broker.is_paused() {
-                self.terminal.get_cursor_position().ok()
+                self.event_broker
+                    .pause_for_cursor_query()
+                    .and_then(|_guard| self.terminal.get_cursor_position().ok())
             } else {
                 None
             };
@@ -548,6 +550,7 @@ impl Tui {
         let last_known_screen_size = terminal.last_known_screen_size;
         if screen_size != last_known_screen_size
             && self.event_broker.is_paused()
+            && let Some(_guard) = self.event_broker.pause_for_cursor_query()
             && let Ok(cursor_pos) = terminal.get_cursor_position()
         {
             let last_known_cursor_pos = terminal.last_known_cursor_pos;
