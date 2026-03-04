@@ -47,8 +47,22 @@ const YOLO_RAW_OVERRIDES: &[&str] = &[
 
 impl CliConfigOverrides {
     pub fn append_yolo_overrides(&mut self) {
-        self.raw_overrides
-            .extend(YOLO_RAW_OVERRIDES.iter().map(|value| (*value).to_string()));
+        for override_entry in YOLO_RAW_OVERRIDES {
+            self.append_override_replacing_key(override_entry);
+        }
+    }
+
+    pub fn append_override_replacing_key(&mut self, override_entry: &str) {
+        let mut parts = override_entry.splitn(2, '=');
+        let key = parts.next().unwrap_or_default().trim();
+        if !key.is_empty() {
+            self.raw_overrides.retain(|entry| {
+                let mut entry_parts = entry.splitn(2, '=');
+                let entry_key = entry_parts.next().unwrap_or_default().trim();
+                entry_key != key
+            });
+        }
+        self.raw_overrides.push(override_entry.to_string());
     }
 
     /// Parse the raw strings captured from the CLI into a list of `(path,
@@ -203,5 +217,30 @@ mod tests {
         let mut expected = vec!["model=\"gpt-5\"".to_string()];
         expected.extend(YOLO_RAW_OVERRIDES.iter().map(|value| (*value).to_string()));
         assert_eq!(overrides.raw_overrides, expected);
+    }
+
+    #[test]
+    fn append_yolo_overrides_replaces_conflicting_keys() {
+        let mut overrides = CliConfigOverrides {
+            raw_overrides: vec![
+                "web_search=\"disabled\"".to_string(),
+                "features.web_search_request=false".to_string(),
+                "features.shell_tool=false".to_string(),
+                "other.flag=true".to_string(),
+            ],
+        };
+        overrides.append_yolo_overrides();
+        assert_eq!(
+            overrides.raw_overrides,
+            vec![
+                "other.flag=true".to_string(),
+                "web_search=\"live\"".to_string(),
+                "features.shell_tool=true".to_string(),
+                "features.unified_exec=true".to_string(),
+                "features.web_search_request=true".to_string(),
+                "features.apply_patch_freeform=true".to_string(),
+                "tools.view_image=true".to_string(),
+            ]
+        );
     }
 }
