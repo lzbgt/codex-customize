@@ -13,6 +13,7 @@ use crate::SandboxState;
 use crate::agent::AgentControl;
 use crate::agent::AgentStatus;
 use crate::agent::agent_status_from_event;
+use crate::base_instructions::ensure_throughput_guidance;
 use crate::compact;
 use crate::compact::run_inline_auto_compact_task;
 use crate::compact::should_use_remote_compact_task;
@@ -288,11 +289,16 @@ impl Codex {
         // 2. conversation history => session_meta.base_instructions
         // 3. base_intructions for current model
         let model_info = models_manager.get_model_info(model.as_str(), &config).await;
-        let base_instructions = config
-            .base_instructions
+        let config_base_instructions = config.base_instructions.clone();
+        let history_base_instructions =
+            conversation_history.get_base_instructions().map(|s| s.text);
+        let mut base_instructions = config_base_instructions
             .clone()
-            .or_else(|| conversation_history.get_base_instructions().map(|s| s.text))
+            .or_else(|| history_base_instructions.clone())
             .unwrap_or_else(|| model_info.get_model_instructions(config.model_personality));
+        if config_base_instructions.is_none() && history_base_instructions.is_none() {
+            base_instructions = ensure_throughput_guidance(base_instructions);
+        }
 
         // TODO (aibrahim): Consolidate config.model and config.model_reasoning_effort into config.collaboration_mode
         // to avoid extracting these fields separately and constructing CollaborationMode here.
