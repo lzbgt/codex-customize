@@ -69,6 +69,7 @@ use ratatui::style::Stylize;
 use ratatui::text::Line;
 use ratatui::widgets::Paragraph;
 use ratatui::widgets::Wrap;
+use std::backtrace::Backtrace;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -82,6 +83,8 @@ use std::thread;
 use std::time::Duration;
 use std::time::Instant;
 use tokio::select;
+#[cfg(unix)]
+use tokio::signal::unix::SignalKind;
 use tokio::sync::Mutex;
 use tokio::sync::broadcast;
 use tokio::sync::mpsc;
@@ -857,34 +860,11 @@ impl App {
                 .last_watchdog_recovery_at
                 .is_none_or(|last| last.elapsed() > Duration::from_secs(30));
             if should_recover {
-                let stats = tui.drain_event_stats();
-                let (
-                    active_buffer_len,
-                    buffered_events_total,
-                    buffer_sampled,
-                    buffer_contended,
-                    channel_count,
-                    active_rx_present,
-                ) = self.thread_event_backlog_stats();
-                tracing::warn!(
-                    elapsed_ms = elapsed.as_millis(),
-                    lock_contended = stats.lock_contended,
-                    poll_in_flight = stats.poll_in_flight,
-                    restarts = stats.restarts,
-                    cursor_query_paused = stats.cursor_query_paused,
-                    cursor_query_skipped = stats.cursor_query_skipped,
-                    polling_active_ms = stats.polling_active_ms,
-                    pause_calls = stats.pause_calls,
-                    resume_calls = stats.resume_calls,
-                    paused_ms = stats.paused_ms,
-                    active_buffer_len,
-                    buffered_events_total,
-                    buffer_sampled,
-                    buffer_contended,
-                    channel_count,
-                    active_rx_present,
-                    active_thread_id = ?self.active_thread_id,
-                    "ui watchdog restarting event stream after prolonged idle"
+                self.log_event_broker_diagnostics(
+                    tui,
+                    "ui watchdog restarting event stream after prolonged idle",
+                    false,
+                    Some(elapsed.as_millis()),
                 );
                 self.last_watchdog_recovery_at = Some(Instant::now());
                 tui.pause_events();
@@ -892,6 +872,47 @@ impl App {
                 tui.frame_requester().schedule_frame();
             }
         }
+    }
+
+    fn log_event_broker_diagnostics(
+        &mut self,
+        tui: &mut tui::Tui,
+        reason: &'static str,
+        include_backtrace: bool,
+        elapsed_ms: Option<u128>,
+    ) {
+        let stats = tui.drain_event_stats();
+        let (
+            active_buffer_len,
+            buffered_events_total,
+            buffer_sampled,
+            buffer_contended,
+            channel_count,
+            active_rx_present,
+        ) = self.thread_event_backlog_stats();
+        let backtrace = include_backtrace.then(Backtrace::force_capture);
+        tracing::warn!(
+            reason,
+            elapsed_ms,
+            lock_contended = stats.lock_contended,
+            poll_in_flight = stats.poll_in_flight,
+            restarts = stats.restarts,
+            cursor_query_paused = stats.cursor_query_paused,
+            cursor_query_skipped = stats.cursor_query_skipped,
+            polling_active_ms = stats.polling_active_ms,
+            pause_calls = stats.pause_calls,
+            resume_calls = stats.resume_calls,
+            paused_ms = stats.paused_ms,
+            active_buffer_len,
+            buffered_events_total,
+            buffer_sampled,
+            buffer_contended,
+            channel_count,
+            active_rx_present,
+            active_thread_id = ?self.active_thread_id,
+            backtrace = ?backtrace,
+            "ui diagnostics snapshot"
+        );
     }
 
     fn thread_event_backlog_stats(&self) -> (Option<usize>, usize, usize, usize, usize, bool) {
@@ -1161,6 +1182,22 @@ impl App {
         let app_event_tx = AppEventSender::new(app_event_tx);
         emit_deprecation_notice(&app_event_tx, ollama_chat_support_notice);
         emit_project_config_warnings(&app_event_tx, &config);
+        #[cfg(unix)]
+        {
+            let app_event_tx = app_event_tx.clone();
+            tokio::spawn(async move {
+                let mut sigusr1 = match tokio::signal::unix::signal(SignalKind::user_defined1()) {
+                    Ok(signal) => signal,
+                    Err(err) => {
+                        tracing::warn!(?err, "failed to install SIGUSR1 handler");
+                        return;
+                    }
+                };
+                while sigusr1.recv().await.is_some() {
+                    app_event_tx.send(AppEvent::DumpDiagnostics { source: "SIGUSR1" });
+                }
+            });
+        }
 
         let thread_manager = Arc::new(ThreadManager::new(
             config.codex_home.clone(),
@@ -1673,6 +1710,14 @@ impl App {
                         tui.insert_history_lines(display);
                     }
                 }
+            }
+            AppEvent::DumpDiagnostics { source } => {
+                self.log_event_broker_diagnostics(
+                    tui,
+                    source,
+                    true,
+                    Some(self.last_draw_at.elapsed().as_millis()),
+                );
             }
             AppEvent::StartCommitAnimation => {
                 if self

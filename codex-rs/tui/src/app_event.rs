@@ -43,6 +43,10 @@ pub(crate) enum WindowsSandboxFallbackReason {
 #[derive(Debug)]
 pub(crate) enum AppEvent {
     CodexEvent(Event),
+    /// Emit a diagnostic snapshot (event broker stats, backtrace, etc.).
+    DumpDiagnostics {
+        source: &'static str,
+    },
     /// Open the agent picker for switching active threads.
     OpenAgentPicker,
     /// Switch the active thread to the selected agent.

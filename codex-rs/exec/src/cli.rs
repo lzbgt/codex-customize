@@ -48,9 +48,9 @@ pub struct Cli {
 
     /// Skip all confirmation prompts, execute commands without sandboxing,
     /// bypass managed policy constraints, disable exec-policy enforcement, and
-    /// force-enable unrestricted tool use (shell/apply_patch/web_search with live
-    /// web search) with full host/network access. EXTREMELY DANGEROUS. Intended
-    /// solely for running in environments that are externally sandboxed.
+    /// force-enable unrestricted tool use (shell/unified_exec/apply_patch/view_image
+    /// plus live web_search) with full host/network access. EXTREMELY DANGEROUS.
+    /// Intended solely for running in environments that are externally sandboxed.
     #[arg(
         long = "dangerously-bypass-approvals-and-sandbox",
         alias = "yolo",

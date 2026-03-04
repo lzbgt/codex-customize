@@ -150,10 +150,16 @@ pub async fn run_main(cli: Cli, codex_linux_sandbox_exe: Option<PathBuf>) -> any
             .push("features.shell_tool=true".to_string());
         config_overrides
             .raw_overrides
+            .push("features.unified_exec=true".to_string());
+        config_overrides
+            .raw_overrides
             .push("features.web_search_request=true".to_string());
         config_overrides
             .raw_overrides
             .push("features.apply_patch_freeform=true".to_string());
+        config_overrides
+            .raw_overrides
+            .push("tools.view_image=true".to_string());
     }
 
     // Parse `-c` overrides from the CLI.

@@ -41,7 +41,7 @@ This file tracks high-impact work items for this repo. Ordering is by priority (
 - Avoid blocking the runtime on the event broker lock (use try_lock in poll).
 - Release broker lock while polling the event source (avoid pause/resume lock contention).
 - Built, codesigned, and installed macOS `codex` + `apply_patch` (Homebrew prefix), and produced versioned Linux x64 + Windows x64 zip artifacts in `dist/`.
-- YOLO now hard-enables apply_patch + web_search via overrides (no legacy warnings) and carries explicit full-access help text.
-- Auto-continue prompts now require dense multi-task turns rather than single small fixes.
+- YOLO now hard-enables shell/unified_exec/apply_patch/view_image/web_search with explicit full-access help text and disabled exec-policy enforcement.
+- Auto-continue prompts now enforce 3+ tasks per turn and explicit scope expansion into tests/docs when needed.
 - Added EventBroker pause/resume/paused-duration stats and watchdog logging for hang triage.
-- Added macOS hang capture helper and TUI hang debugging doc.
+- Added macOS hang capture helper, SIGUSR1 diagnostics, and TUI hang debugging doc.

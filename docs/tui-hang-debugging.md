@@ -26,6 +26,16 @@ scripts/capture_tui_sample.sh <pid> 10
 
 The sample output is written to `build/logs/sample_codex_<pid>_<timestamp>.txt` by default.
 
+## Signal-triggered diagnostics (Unix)
+
+Send `SIGUSR1` to emit a diagnostic snapshot (event broker stats + backtrace) into `codex-tui.log`:
+
+```bash
+kill -USR1 <pid>
+```
+
+This captures the stack of the TUI thread that receives the signal; it is not a full multi-thread dump.
+
 ## What to look for
 
 - Watchdog logs in `codex-tui.log` for:

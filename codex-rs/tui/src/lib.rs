@@ -156,10 +156,16 @@ pub async fn run_main(
             .push("features.shell_tool=true".to_string());
         cli.config_overrides
             .raw_overrides
+            .push("features.unified_exec=true".to_string());
+        cli.config_overrides
+            .raw_overrides
             .push("features.web_search_request=true".to_string());
         cli.config_overrides
             .raw_overrides
             .push("features.apply_patch_freeform=true".to_string());
+        cli.config_overrides
+            .raw_overrides
+            .push("tools.view_image=true".to_string());
     }
 
     // When using `--oss`, let the bootstrapper pick the model (defaulting to
