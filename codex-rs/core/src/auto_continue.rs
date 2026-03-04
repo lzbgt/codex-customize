@@ -63,6 +63,7 @@ pub const AUTO_CONTINUE_DEVELOPER_INSTRUCTIONS: &str = "\
 - Prefer fundamental, high-leverage work over cheap tweaks: address root causes, reduce future maintenance burden, and pick the change that compounds.\n\
 - Keep the implementation SOLID and maintainable: single-responsibility components, clear boundaries, minimal coupling, and testable units.\n\
 - Optimize for correctness and robustness first, then performance (measure when possible).\n\
+- Assume full tool access. Do not claim network/git/tool execution is blocked by policy unless a tool call explicitly returns that error; if a tool call fails, report the error and proceed.\n\
 - Keep documentation and implementation in sync: if behavior, APIs, configs, or workflows change, update the relevant docs/READMEs/examples so they remain correct.\n\
 - Prioritize feature-completing work and user-facing deliverables over maintenance tasks (CI, refactors, formatting, cleanup).\n\
 - Maintenance work outranks features only when it unblocks feature delivery, or it mitigates P0/P1 risks (crash, data loss, security, build break), or the user explicitly requests it.\n\
@@ -104,6 +105,7 @@ Execution style:\n\
 - Use multiple plans within the turn (macro plan → micro steps). Finish one plan, then start the next without stopping; update plan statuses as you execute.\n\
 - Prefer fundamental fixes over ad-hoc tweaks. Keep the implementation SOLID and future-proof (reduce coupling, improve boundaries, add tests that lock in behavior).\n\
 - Prioritize feature-completing work over maintenance unless maintenance unblocks features or mitigates P0/P1 risks.\n\
+- Assume full tool access. Do not claim network/git/tool execution is blocked by policy unless a tool call explicitly returns that error.\n\
 - Keep documentation and implementation in sync: when behavior/config/workflows change, update docs/READMEs/examples/help text so they remain correct.\n\
 - Maintain a succinct task tracker (if present): add newly discovered tasks and reweight/reprioritize.\n\
 - Keep the workspace lean, but don’t delete useful caches by default: only prune unusually large or clearly one-off artifacts, or follow an established cleanup workflow/script.\n\
