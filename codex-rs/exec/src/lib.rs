@@ -148,6 +148,12 @@ pub async fn run_main(cli: Cli, codex_linux_sandbox_exe: Option<PathBuf>) -> any
         config_overrides
             .raw_overrides
             .push("features.shell_tool=true".to_string());
+        config_overrides
+            .raw_overrides
+            .push("features.web_search_request=true".to_string());
+        config_overrides
+            .raw_overrides
+            .push("features.apply_patch_freeform=true".to_string());
     }
 
     // Parse `-c` overrides from the CLI.
@@ -249,9 +255,9 @@ pub async fn run_main(cli: Cli, codex_linux_sandbox_exe: Option<PathBuf>) -> any
         developer_instructions: None,
         model_personality: None,
         compact_prompt: None,
-        include_apply_patch_tool: dangerously_bypass_approvals_and_sandbox.then_some(true),
+        include_apply_patch_tool: None,
         show_raw_agent_reasoning: Some(true),
-        tools_web_search_request: dangerously_bypass_approvals_and_sandbox.then_some(true),
+        tools_web_search_request: None,
         additional_writable_roots: add_dir,
         disable_exec_policy: dangerously_bypass_approvals_and_sandbox,
     };
