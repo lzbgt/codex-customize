@@ -88,6 +88,17 @@ codex --sandbox danger-full-access
 
 The same setting can be persisted in `~/.codex/config.toml` via the top-level `sandbox_mode = "MODE"` key, e.g. `sandbox_mode = "workspace-write"`.
 
+### YOLO mode (no restrictions)
+
+Codex also exposes a deliberately unsafe escape hatch for externally sandboxed environments:
+
+```shell
+# Alias for --dangerously-bypass-approvals-and-sandbox
+codex --yolo
+```
+
+When enabled, Codex skips approval prompts, runs without sandboxing, bypasses managed policy constraints, disables exec-policy enforcement, and force-enables unrestricted tool use (shell, apply_patch, and live web_search). The TUI additionally enables `--auto-continue`.
+
 ## Code Organization
 
 This folder is the root of a Cargo workspace. It contains quite a bit of experimental code, but here are the key crates:
