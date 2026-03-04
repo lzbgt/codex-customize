@@ -5,10 +5,6 @@ This file tracks high-impact work items for this repo. Ordering is by priority (
 ## P0
 
 - Investigate remaining TUI hangs in long-running sessions:
-  - Mitigation: skip resume-time cursor queries unless the event stream is paused.
-  - Mitigation: watchdog restarts the event stream after prolonged no-draw while streaming.
-  - Mitigation: avoid blocking the runtime on the event broker lock (use try_lock in poll).
-  - Mitigation: release broker lock while polling the event source (avoid pause/resume lock contention).
   - Capture symbolicated stacks from a debug build (`lldb` or `sample` on the debug binary).
   - Identify the blocking await/condvar and add watchdog metrics/logging around event queues.
   - Add a regression test or targeted fuzz case once the root cause is confirmed.
@@ -40,4 +36,8 @@ This file tracks high-impact work items for this repo. Ordering is by priority (
 - Recreate the TUI event stream if it ends unexpectedly, resuming the broker and scheduling a redraw.
 - Make rollout persistence nonblocking for live event delivery to avoid UI stalls when the writer is backpressured.
 - Skip cursor-position queries while the crossterm poller is active (pause broker for query; skip if in flight).
+- Skip resume-time cursor queries unless the event stream is paused.
+- Watchdog restarts the event stream after prolonged no-draw while streaming.
+- Avoid blocking the runtime on the event broker lock (use try_lock in poll).
+- Release broker lock while polling the event source (avoid pause/resume lock contention).
 - Built, codesigned, and installed macOS `codex` + `apply_patch` (Homebrew prefix), and produced versioned Linux x64 + Windows x64 zip artifacts in `dist/`.

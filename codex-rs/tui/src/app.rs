@@ -300,6 +300,10 @@ impl ThreadEventStore {
             events: self.buffer.iter().cloned().collect(),
         }
     }
+
+    fn buffer_len(&self) -> usize {
+        self.buffer.len()
+    }
 }
 
 #[derive(Debug)]
@@ -854,6 +858,8 @@ impl App {
                 .is_none_or(|last| last.elapsed() > Duration::from_secs(30));
             if should_recover {
                 let stats = tui.drain_event_stats();
+                let (active_buffer_len, buffered_events_total, buffer_sampled, buffer_contended) =
+                    self.thread_event_backlog_stats();
                 tracing::warn!(
                     elapsed_ms = elapsed.as_millis(),
                     lock_contended = stats.lock_contended,
@@ -861,6 +867,10 @@ impl App {
                     restarts = stats.restarts,
                     cursor_query_paused = stats.cursor_query_paused,
                     cursor_query_skipped = stats.cursor_query_skipped,
+                    active_buffer_len,
+                    buffered_events_total,
+                    buffer_sampled,
+                    buffer_contended,
                     "ui watchdog restarting event stream after prolonged idle"
                 );
                 self.last_watchdog_recovery_at = Some(Instant::now());
@@ -869,6 +879,43 @@ impl App {
                 tui.frame_requester().schedule_frame();
             }
         }
+    }
+
+    fn thread_event_backlog_stats(&self) -> (Option<usize>, usize, usize, usize) {
+        let mut buffered_events_total = 0;
+        let mut buffer_sampled = 0;
+        let mut buffer_contended = 0;
+
+        let active_buffer_len = self.active_thread_id.and_then(|thread_id| {
+            self.thread_event_channels
+                .get(&thread_id)
+                .and_then(|channel| match channel.store.try_lock() {
+                    Ok(store) => Some(store.buffer_len()),
+                    Err(_) => {
+                        buffer_contended += 1;
+                        None
+                    }
+                })
+        });
+
+        for channel in self.thread_event_channels.values() {
+            match channel.store.try_lock() {
+                Ok(store) => {
+                    buffered_events_total += store.buffer_len();
+                    buffer_sampled += 1;
+                }
+                Err(_) => {
+                    buffer_contended += 1;
+                }
+            }
+        }
+
+        (
+            active_buffer_len,
+            buffered_events_total,
+            buffer_sampled,
+            buffer_contended,
+        )
     }
 
     async fn enqueue_thread_event(
