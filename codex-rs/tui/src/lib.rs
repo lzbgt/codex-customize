@@ -147,8 +147,7 @@ pub async fn run_main(
     // Map the legacy --search flag to the canonical web_search mode.
     if cli.web_search {
         cli.config_overrides
-            .raw_overrides
-            .push("web_search=\"live\"".to_string());
+            .append_override_replacing_key("web_search=\"live\"");
     }
     if cli.dangerously_bypass_approvals_and_sandbox {
         cli.config_overrides.append_yolo_overrides();

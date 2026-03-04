@@ -44,6 +44,7 @@ This file tracks high-impact work items for this repo. Ordering is by priority (
 - YOLO now hard-enables shell/unified_exec/apply_patch/view_image/web_search with explicit full-access help text and disabled exec-policy enforcement.
 - Auto-continue prompts now enforce 5+ tasks per turn and explicit scope expansion into tests/docs when needed.
 - Centralized YOLO override handling and ensured it replaces conflicting config/CLI overrides for full-power behavior.
+- TUI `--search` override now replaces conflicting `web_search` config entries, and CLI override precedence documented.
 - Added EventBroker pause/resume/paused-duration stats and watchdog logging for hang triage.
 - Added macOS hang capture helper, SIGUSR1 diagnostics, and TUI hang debugging doc.
 - Honored `tools.view_image`/profile overrides by gating the tool registry, with coverage tests.

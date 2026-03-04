@@ -36,6 +36,12 @@ Some legacy config keys are still accepted for compatibility but are deprecated:
   `web_search = "disabled" | "cached" | "live"` mode, or set `[features].web_search_request = true`
   if you need the raw tool toggle.
 
+## CLI overrides
+
+Codex applies `--config key=value` overrides after loading `~/.codex/config.toml`, so the CLI wins
+over config defaults. In YOLO mode (`--yolo`), Codex replaces any conflicting overrides to force
+full-power behavior (live web search and unrestricted tool enablement).
+
 ## Notices
 
 Codex stores "do not show again" flags for some UI prompts under the `[notice]` table.

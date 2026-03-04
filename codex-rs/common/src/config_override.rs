@@ -243,4 +243,31 @@ mod tests {
             ]
         );
     }
+
+    #[test]
+    fn append_override_replacing_key_only_matches_exact_key() {
+        let mut overrides = CliConfigOverrides {
+            raw_overrides: vec![
+                "web_search_mode=\"cached\"".to_string(),
+                "web_search=\"disabled\"".to_string(),
+            ],
+        };
+        overrides.append_override_replacing_key("web_search=\"live\"");
+        assert_eq!(
+            overrides.raw_overrides,
+            vec![
+                "web_search_mode=\"cached\"".to_string(),
+                "web_search=\"live\"".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn append_override_replacing_key_handles_missing_equals() {
+        let mut overrides = CliConfigOverrides {
+            raw_overrides: vec!["flag=true".to_string()],
+        };
+        overrides.append_override_replacing_key("flag");
+        assert_eq!(overrides.raw_overrides, vec!["flag".to_string()]);
+    }
 }
