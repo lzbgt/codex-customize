@@ -515,6 +515,7 @@ mod tests {
     use crate::config_loader::ConfigRequirementsToml;
     use crate::features::Feature;
     use crate::features::Features;
+    use crate::tools::sandboxing::default_exec_approval_requirement;
     use codex_app_server_protocol::ConfigLayerSource;
     use codex_protocol::protocol::AskForApproval;
     use codex_protocol::protocol::SandboxPolicy;
@@ -565,6 +566,33 @@ mod tests {
             policy.check_multiple(commands.iter(), &|_| Decision::Allow)
         );
         assert!(!temp_dir.path().join(RULES_DIR_NAME).exists());
+    }
+
+    #[tokio::test]
+    async fn exec_policy_disabled_uses_default_requirement() {
+        let policy = ExecPolicyManager::new(Arc::new(Policy::empty()));
+        let mut features = Features::with_defaults();
+        features.disable(Feature::ExecPolicy);
+
+        let command = vec_str(&["git", "clone", "https://example.com/repo.git"]);
+        let approval_policy = AskForApproval::Never;
+        let sandbox_policy = SandboxPolicy::DangerFullAccess;
+        let sandbox_permissions = SandboxPermissions::UseDefault;
+
+        let requirement = policy
+            .create_exec_approval_requirement_for_command(
+                &features,
+                &command,
+                approval_policy,
+                &sandbox_policy,
+                sandbox_permissions,
+            )
+            .await;
+
+        assert_eq!(
+            requirement,
+            default_exec_approval_requirement(approval_policy, &sandbox_policy)
+        );
     }
 
     #[tokio::test]

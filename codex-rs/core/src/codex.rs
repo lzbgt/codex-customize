@@ -2760,16 +2760,25 @@ async fn spawn_review_thread(
         .models_manager
         .get_model_info(&model, &config)
         .await;
-    // For reviews, disable web_search and view_image regardless of global settings.
-    let mut review_features = sess.features.clone();
-    review_features
-        .disable(crate::features::Feature::WebSearchRequest)
-        .disable(crate::features::Feature::WebSearchCached);
-    let review_web_search_mode = WebSearchMode::Disabled;
+    // For reviews, disable web_search unless the session is explicitly unrestricted.
+    let review_is_unrestricted =
+        matches!(
+            config.sandbox_policy.get(),
+            SandboxPolicy::DangerFullAccess | SandboxPolicy::ExternalSandbox { .. }
+        ) && matches!(config.approval_policy.value(), AskForApproval::Never);
+    let (review_features, review_web_search_mode) = if review_is_unrestricted {
+        (sess.features.clone(), config.web_search_mode)
+    } else {
+        let mut review_features = sess.features.clone();
+        review_features
+            .disable(crate::features::Feature::WebSearchRequest)
+            .disable(crate::features::Feature::WebSearchCached);
+        (review_features, Some(WebSearchMode::Disabled))
+    };
     let tools_config = ToolsConfig::new(&ToolsConfigParams {
         model_info: &review_model_info,
         features: &review_features,
-        web_search_mode: Some(review_web_search_mode),
+        web_search_mode: review_web_search_mode,
     });
 
     let review_prompt = resolved.prompt.clone();
@@ -2781,7 +2790,7 @@ async fn spawn_review_thread(
     let mut per_turn_config = (*config).clone();
     per_turn_config.model = Some(model.clone());
     per_turn_config.features = review_features.clone();
-    per_turn_config.web_search_mode = Some(review_web_search_mode);
+    per_turn_config.web_search_mode = review_web_search_mode;
 
     let otel_manager = parent_turn_context
         .client

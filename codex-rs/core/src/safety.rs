@@ -74,6 +74,18 @@ pub fn assess_patch_safety(
         };
     }
 
+    if matches!(policy, AskForApproval::Never)
+        && matches!(
+            sandbox_policy,
+            SandboxPolicy::DangerFullAccess | SandboxPolicy::ExternalSandbox { .. }
+        )
+    {
+        return SafetyCheck::AutoApprove {
+            sandbox_type: SandboxType::None,
+            user_explicitly_approved: false,
+        };
+    }
+
     match policy {
         AskForApproval::OnFailure | AskForApproval::Never | AskForApproval::OnRequest => {
             // Continue to see if this can be auto-approved.
@@ -278,6 +290,25 @@ mod tests {
 
         assert_eq!(
             assess_patch_safety(&add_inside, AskForApproval::OnRequest, &policy, &cwd),
+            SafetyCheck::AutoApprove {
+                sandbox_type: SandboxType::None,
+                user_explicitly_approved: false,
+            }
+        );
+    }
+
+    #[test]
+    fn danger_full_access_allows_outside_project_with_never() {
+        let tmp = TempDir::new().unwrap();
+        let cwd = tmp.path().to_path_buf();
+        let parent = cwd.parent().unwrap().to_path_buf();
+        let add_outside =
+            ApplyPatchAction::new_add_for_test(&parent.join("outside.txt"), "".to_string());
+
+        let policy = SandboxPolicy::DangerFullAccess;
+
+        assert_eq!(
+            assess_patch_safety(&add_outside, AskForApproval::Never, &policy, &cwd),
             SafetyCheck::AutoApprove {
                 sandbox_type: SandboxType::None,
                 user_explicitly_approved: false,

@@ -82,8 +82,10 @@ pub struct Cli {
 
     /// Skip all confirmation prompts, execute commands without sandboxing,
     /// bypass managed policy constraints, disable exec-policy enforcement,
-    /// and enable auto-continue. EXTREMELY DANGEROUS. Intended solely for
-    /// running in environments that are externally sandboxed.
+    /// force-enable unrestricted tool use (shell/apply_patch/web_search with
+    /// live web search), and enable auto-continue.
+    /// EXTREMELY DANGEROUS. Intended solely for running in environments that
+    /// are externally sandboxed.
     #[arg(
         long = "dangerously-bypass-approvals-and-sandbox",
         alias = "yolo",

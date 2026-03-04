@@ -46,9 +46,11 @@ pub struct Cli {
     #[arg(long = "full-auto", default_value_t = false, global = true)]
     pub full_auto: bool,
 
-    /// Skip all confirmation prompts, execute commands without sandboxing, and
-    /// bypass managed policy constraints. EXTREMELY DANGEROUS. Intended solely
-    /// for running in environments that are externally sandboxed.
+    /// Skip all confirmation prompts, execute commands without sandboxing,
+    /// bypass managed policy constraints, disable exec-policy enforcement, and
+    /// force-enable unrestricted tool use (shell/apply_patch/web_search with live
+    /// web search). EXTREMELY DANGEROUS. Intended solely for running in
+    /// environments that are externally sandboxed.
     #[arg(
         long = "dangerously-bypass-approvals-and-sandbox",
         alias = "yolo",

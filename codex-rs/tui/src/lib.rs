@@ -145,10 +145,15 @@ pub async fn run_main(
     };
 
     // Map the legacy --search flag to the canonical web_search mode.
-    if cli.web_search {
+    if cli.web_search || cli.dangerously_bypass_approvals_and_sandbox {
         cli.config_overrides
             .raw_overrides
             .push("web_search=\"live\"".to_string());
+    }
+    if cli.dangerously_bypass_approvals_and_sandbox {
+        cli.config_overrides
+            .raw_overrides
+            .push("features.shell_tool=true".to_string());
     }
 
     // When using `--oss`, let the bootstrapper pick the model (defaulting to
@@ -259,6 +264,8 @@ pub async fn run_main(
         show_raw_agent_reasoning: Some(true),
         additional_writable_roots: additional_dirs,
         disable_exec_policy: cli.dangerously_bypass_approvals_and_sandbox,
+        include_apply_patch_tool: cli.dangerously_bypass_approvals_and_sandbox.then_some(true),
+        tools_web_search_request: cli.dangerously_bypass_approvals_and_sandbox.then_some(true),
         ..Default::default()
     };
 

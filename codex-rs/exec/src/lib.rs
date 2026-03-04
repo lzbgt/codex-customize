@@ -99,7 +99,7 @@ pub async fn run_main(cli: Cli, codex_linux_sandbox_exe: Option<PathBuf>) -> any
         sandbox_mode: sandbox_mode_cli_arg,
         prompt,
         output_schema: output_schema_path,
-        config_overrides,
+        mut config_overrides,
     } = cli;
 
     let (stdout_with_ansi, stderr_with_ansi) = match color {
@@ -140,6 +140,15 @@ pub async fn run_main(cli: Cli, codex_linux_sandbox_exe: Option<PathBuf>) -> any
     } else {
         LoaderOverrides::default()
     };
+
+    if dangerously_bypass_approvals_and_sandbox {
+        config_overrides
+            .raw_overrides
+            .push("web_search=\"live\"".to_string());
+        config_overrides
+            .raw_overrides
+            .push("features.shell_tool=true".to_string());
+    }
 
     // Parse `-c` overrides from the CLI.
     let cli_kv_overrides = match config_overrides.parse_overrides() {
@@ -240,9 +249,9 @@ pub async fn run_main(cli: Cli, codex_linux_sandbox_exe: Option<PathBuf>) -> any
         developer_instructions: None,
         model_personality: None,
         compact_prompt: None,
-        include_apply_patch_tool: None,
+        include_apply_patch_tool: dangerously_bypass_approvals_and_sandbox.then_some(true),
         show_raw_agent_reasoning: Some(true),
-        tools_web_search_request: None,
+        tools_web_search_request: dangerously_bypass_approvals_and_sandbox.then_some(true),
         additional_writable_roots: add_dir,
         disable_exec_policy: dangerously_bypass_approvals_and_sandbox,
     };
