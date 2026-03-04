@@ -51,6 +51,7 @@ This file tracks high-impact work items for this repo. Ordering is by priority (
 - TUI auto-continue flag help and docs mention approval semantics and max-turns cap.
 - Added local build/install script for repeatable release builds, codesign, install, and cleanup.
 - Added helper-script usage/logging notes in install docs and root README.
+- Added `just build-install-local` target for repeatable local build/install.
 - YOLO now force-resets shell environment policy overrides to ensure full env inheritance.
 - YOLO CLI help text now mentions full env inheritance behavior.
 - Added EventBroker pause/resume/paused-duration stats and watchdog logging for hang triage.

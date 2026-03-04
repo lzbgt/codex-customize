@@ -55,6 +55,12 @@ For repeated local builds with codesigning/install, use the helper script:
 scripts/build_install_local.sh
 ```
 
+Or run it via `just` from the repo root:
+
+```bash
+just build-install-local
+```
+
 By default it installs to `/opt/homebrew/bin` when available, otherwise `/usr/local/bin`.
 Override with `CODEX_INSTALL_PREFIX=/your/prefix`.
 
