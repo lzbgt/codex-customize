@@ -36,7 +36,21 @@ pub struct CliConfigOverrides {
     pub raw_overrides: Vec<String>,
 }
 
+const YOLO_RAW_OVERRIDES: &[&str] = &[
+    "web_search=\"live\"",
+    "features.shell_tool=true",
+    "features.unified_exec=true",
+    "features.web_search_request=true",
+    "features.apply_patch_freeform=true",
+    "tools.view_image=true",
+];
+
 impl CliConfigOverrides {
+    pub fn append_yolo_overrides(&mut self) {
+        self.raw_overrides
+            .extend(YOLO_RAW_OVERRIDES.iter().map(|value| (*value).to_string()));
+    }
+
     /// Parse the raw strings captured from the CLI into a list of `(path,
     /// value)` tuples where `value` is a `serde_json::Value`.
     pub fn parse_overrides(&self) -> Result<Vec<(String, Value)>, String> {
@@ -178,5 +192,16 @@ mod tests {
         let tbl = v.as_table().expect("table");
         assert_eq!(tbl.get("a").unwrap().as_integer(), Some(1));
         assert_eq!(tbl.get("b").unwrap().as_integer(), Some(2));
+    }
+
+    #[test]
+    fn append_yolo_overrides_appends_expected_entries() {
+        let mut overrides = CliConfigOverrides {
+            raw_overrides: vec!["model=\"gpt-5\"".to_string()],
+        };
+        overrides.append_yolo_overrides();
+        let mut expected = vec!["model=\"gpt-5\"".to_string()];
+        expected.extend(YOLO_RAW_OVERRIDES.iter().map(|value| (*value).to_string()));
+        assert_eq!(overrides.raw_overrides, expected);
     }
 }

@@ -142,24 +142,7 @@ pub async fn run_main(cli: Cli, codex_linux_sandbox_exe: Option<PathBuf>) -> any
     };
 
     if dangerously_bypass_approvals_and_sandbox {
-        config_overrides
-            .raw_overrides
-            .push("web_search=\"live\"".to_string());
-        config_overrides
-            .raw_overrides
-            .push("features.shell_tool=true".to_string());
-        config_overrides
-            .raw_overrides
-            .push("features.unified_exec=true".to_string());
-        config_overrides
-            .raw_overrides
-            .push("features.web_search_request=true".to_string());
-        config_overrides
-            .raw_overrides
-            .push("features.apply_patch_freeform=true".to_string());
-        config_overrides
-            .raw_overrides
-            .push("tools.view_image=true".to_string());
+        config_overrides.append_yolo_overrides();
     }
 
     // Parse `-c` overrides from the CLI.

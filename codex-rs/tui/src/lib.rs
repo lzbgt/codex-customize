@@ -145,27 +145,13 @@ pub async fn run_main(
     };
 
     // Map the legacy --search flag to the canonical web_search mode.
-    if cli.web_search || cli.dangerously_bypass_approvals_and_sandbox {
+    if cli.web_search {
         cli.config_overrides
             .raw_overrides
             .push("web_search=\"live\"".to_string());
     }
     if cli.dangerously_bypass_approvals_and_sandbox {
-        cli.config_overrides
-            .raw_overrides
-            .push("features.shell_tool=true".to_string());
-        cli.config_overrides
-            .raw_overrides
-            .push("features.unified_exec=true".to_string());
-        cli.config_overrides
-            .raw_overrides
-            .push("features.web_search_request=true".to_string());
-        cli.config_overrides
-            .raw_overrides
-            .push("features.apply_patch_freeform=true".to_string());
-        cli.config_overrides
-            .raw_overrides
-            .push("tools.view_image=true".to_string());
+        cli.config_overrides.append_yolo_overrides();
     }
 
     // When using `--oss`, let the bootstrapper pick the model (defaulting to
