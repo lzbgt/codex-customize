@@ -97,7 +97,7 @@ Codex also exposes a deliberately unsafe escape hatch for externally sandboxed e
 codex --yolo
 ```
 
-When enabled, Codex skips approval prompts, runs without sandboxing, bypasses managed policy constraints, disables exec-policy enforcement, and force-enables unrestricted tool use (shell, apply_patch, and live web_search). The TUI additionally enables `--auto-continue`.
+When enabled, Codex skips approval prompts, runs without sandboxing, bypasses managed policy constraints, disables exec-policy enforcement, and force-enables unrestricted tool use (shell, apply_patch, and live web_search). The TUI additionally enables `--auto-continue` (you can cap it with `--auto-continue-max-turns N`).
 
 ## Code Organization
 

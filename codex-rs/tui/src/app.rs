@@ -3346,4 +3346,32 @@ mod tests {
         // No TurnStarted observed, but TurnComplete should still trigger auto-continue.
         assert!(state.should_enqueue_for_turn_complete("turn-1", None));
     }
+
+    #[test]
+    fn auto_continue_max_turns_stops_after_limit() {
+        let mut state = AutoContinueState::new(true, Some(1));
+        state.on_turn_started("turn-1");
+        assert!(state.should_enqueue_for_turn_complete("turn-1", None));
+
+        state.on_turn_started("turn-2");
+        assert!(!state.should_enqueue_for_turn_complete("turn-2", None));
+        assert!(state.max_turns_reached);
+
+        state.on_turn_started("turn-3");
+        assert!(!state.should_enqueue_for_turn_complete("turn-3", None));
+    }
+
+    #[test]
+    fn auto_continue_max_turns_blocks_auto_answer() {
+        let mut state = AutoContinueState::new(true, Some(1));
+        state.on_turn_started("turn-1");
+        assert!(state.should_enqueue_for_turn_complete("turn-1", None));
+
+        state.on_turn_started("turn-2");
+        assert!(!state.should_enqueue_for_turn_complete("turn-2", None));
+        assert!(!state.should_auto_answer_user_input_request(
+            "turn-2",
+            Some(codex_core::auto_continue::AutoModeNext::Continue),
+        ));
+    }
 }
