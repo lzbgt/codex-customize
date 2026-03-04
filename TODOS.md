@@ -46,6 +46,7 @@ This file tracks high-impact work items for this repo. Ordering is by priority (
 - Centralized YOLO override handling and ensured it replaces conflicting config/CLI overrides for full-power behavior.
 - TUI `--search` override now replaces conflicting `web_search` config entries, and CLI override precedence documented.
 - Auto-continue guidance now warns against approval-loop stalls and aligns batch targets to 5–10 tasks.
+- YOLO now force-resets shell environment policy overrides to ensure full env inheritance.
 - Added EventBroker pause/resume/paused-duration stats and watchdog logging for hang triage.
 - Added macOS hang capture helper, SIGUSR1 diagnostics, and TUI hang debugging doc.
 - Honored `tools.view_image`/profile overrides by gating the tool registry, with coverage tests.

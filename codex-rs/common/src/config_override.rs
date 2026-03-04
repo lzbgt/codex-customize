@@ -43,6 +43,10 @@ const YOLO_RAW_OVERRIDES: &[&str] = &[
     "features.web_search_request=true",
     "features.apply_patch_freeform=true",
     "tools.view_image=true",
+    "shell_environment_policy.inherit=\"all\"",
+    "shell_environment_policy.ignore_default_excludes=true",
+    "shell_environment_policy.exclude=[]",
+    "shell_environment_policy.include_only=[]",
 ];
 
 impl CliConfigOverrides {
@@ -226,6 +230,10 @@ mod tests {
                 "web_search=\"disabled\"".to_string(),
                 "features.web_search_request=false".to_string(),
                 "features.shell_tool=false".to_string(),
+                "shell_environment_policy.inherit=\"none\"".to_string(),
+                "shell_environment_policy.ignore_default_excludes=false".to_string(),
+                "shell_environment_policy.exclude=[\"*TOKEN*\"]".to_string(),
+                "shell_environment_policy.include_only=[\"HOME\"]".to_string(),
                 "other.flag=true".to_string(),
             ],
         };
@@ -240,6 +248,10 @@ mod tests {
                 "features.web_search_request=true".to_string(),
                 "features.apply_patch_freeform=true".to_string(),
                 "tools.view_image=true".to_string(),
+                "shell_environment_policy.inherit=\"all\"".to_string(),
+                "shell_environment_policy.ignore_default_excludes=true".to_string(),
+                "shell_environment_policy.exclude=[]".to_string(),
+                "shell_environment_policy.include_only=[]".to_string(),
             ]
         );
     }

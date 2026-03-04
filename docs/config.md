@@ -40,7 +40,8 @@ Some legacy config keys are still accepted for compatibility but are deprecated:
 
 Codex applies `--config key=value` overrides after loading `~/.codex/config.toml`, so the CLI wins
 over config defaults. In YOLO mode (`--yolo`), Codex replaces any conflicting overrides to force
-full-power behavior (live web search and unrestricted tool enablement).
+full-power behavior (live web search, unrestricted tool enablement, and a fully inherited shell
+environment with default excludes disabled).
 
 ## Notices
 
