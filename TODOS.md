@@ -47,6 +47,7 @@ This file tracks high-impact work items for this repo. Ordering is by priority (
 - TUI `--search` override now replaces conflicting `web_search` config entries, and CLI override precedence documented.
 - Auto-continue guidance now warns against approval-loop stalls and aligns batch targets to 5–10 tasks.
 - Auto-continue follow-up prompt now treats "Continue" as approval for pending required steps.
+- Auto-continue approval semantics documented in README.
 - YOLO now force-resets shell environment policy overrides to ensure full env inheritance.
 - YOLO CLI help text now mentions full env inheritance behavior.
 - Added EventBroker pause/resume/paused-duration stats and watchdog logging for hang triage.

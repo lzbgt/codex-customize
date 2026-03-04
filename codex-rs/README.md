@@ -99,6 +99,10 @@ codex --yolo
 
 When enabled, Codex skips approval prompts, runs without sandboxing, bypasses managed policy constraints, disables exec-policy enforcement, and force-enables unrestricted tool use (shell, unified_exec, apply_patch, view_image, and live web_search) with full host/network access. YOLO overrides replace conflicting config/CLI overrides to guarantee full-power behavior, including resetting the shell environment policy to inherit all variables with no default excludes. The TUI additionally enables `--auto-continue` (you can cap it with `--auto-continue-max-turns N`).
 
+### Auto-continue (TUI)
+
+When `--auto-continue` is enabled, the TUI submits a curated "Continue" follow-up prompt after each turn unless the agent requests stop. That follow-up also counts as approval for any previously requested required step (such as a full test suite) unless the user explicitly declined.
+
 ## Code Organization
 
 This folder is the root of a Cargo workspace. It contains quite a bit of experimental code, but here are the key crates:

@@ -43,6 +43,9 @@ over config defaults. In YOLO mode (`--yolo`), Codex replaces any conflicting ov
 full-power behavior (live web search, unrestricted tool enablement, and a fully inherited shell
 environment with default excludes disabled).
 
+When the TUI runs with `--auto-continue`, the follow-up "Continue" prompt also grants approval
+for any previously requested required step unless the user explicitly declined.
+
 ## Notices
 
 Codex stores "do not show again" flags for some UI prompts under the `[notice]` table.

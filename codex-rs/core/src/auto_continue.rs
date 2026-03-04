@@ -53,6 +53,7 @@ pub fn parse_auto_mode_next(text: &str) -> Option<AutoModeNext> {
 
 #[cfg(test)]
 mod tests {
+    use super::AUTO_CONTINUE_FOLLOWUP_PROMPT;
     use super::AutoModeNext;
     use super::parse_auto_mode_next;
     use pretty_assertions::assert_eq;
@@ -89,6 +90,15 @@ mod tests {
     fn ignores_unrecognized_values() {
         assert_eq!(parse_auto_mode_next("AUTO_MODE_NEXT=maybe"), None);
         assert_eq!(parse_auto_mode_next("no directive here"), None);
+    }
+
+    #[test]
+    fn followup_prompt_includes_approval_note() {
+        assert!(AUTO_CONTINUE_FOLLOWUP_PROMPT.starts_with("Continue."));
+        assert!(
+            AUTO_CONTINUE_FOLLOWUP_PROMPT.contains("grants approval"),
+            "auto-continue followup should note implicit approval"
+        );
     }
 }
 /// Developer instructions injected when `--auto-continue` is enabled.
@@ -130,6 +140,8 @@ pub const AUTO_CONTINUE_DEVELOPER_INSTRUCTIONS: &str = "\
 ///
 /// This is sent as a normal user prompt after each completed turn unless the agent
 /// explicitly requests stop.
+/// The follow-up should grant approval for any required step the agent requested
+/// in the prior turn unless the user explicitly declined.
 pub const AUTO_CONTINUE_FOLLOWUP_PROMPT: &str = "\
 Continue.\n\
 \n\
