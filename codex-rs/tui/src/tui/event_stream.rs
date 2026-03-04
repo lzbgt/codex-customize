@@ -141,6 +141,9 @@ impl<S: EventSource + Default> EventBroker<S> {
 
     pub fn pause_for_cursor_query(&self) -> Option<EventBrokerPauseGuard<'_, S>> {
         if self.polling_active.load(Ordering::Acquire) {
+            self.stats
+                .cursor_query_skipped
+                .fetch_add(1, Ordering::Relaxed);
             return None;
         }
         let mut state = match self.state.try_lock() {
@@ -148,20 +151,37 @@ impl<S: EventSource + Default> EventBroker<S> {
             Err(TryLockError::Poisoned(guard)) => guard.into_inner(),
             Err(TryLockError::WouldBlock) => {
                 self.stats.lock_contended.fetch_add(1, Ordering::Relaxed);
+                self.stats
+                    .cursor_query_skipped
+                    .fetch_add(1, Ordering::Relaxed);
                 return None;
             }
         };
         match &mut *state {
-            EventBrokerState::Paused => Some(EventBrokerPauseGuard::new(self, false)),
+            EventBrokerState::Paused => {
+                self.stats
+                    .cursor_query_paused
+                    .fetch_add(1, Ordering::Relaxed);
+                Some(EventBrokerPauseGuard::new(self, false))
+            }
             EventBrokerState::Start => {
                 *state = EventBrokerState::Paused;
+                self.stats
+                    .cursor_query_paused
+                    .fetch_add(1, Ordering::Relaxed);
                 Some(EventBrokerPauseGuard::new(self, true))
             }
             EventBrokerState::Running(event_state) => {
                 if event_state.polling {
+                    self.stats
+                        .cursor_query_skipped
+                        .fetch_add(1, Ordering::Relaxed);
                     return None;
                 }
                 *state = EventBrokerState::Paused;
+                self.stats
+                    .cursor_query_paused
+                    .fetch_add(1, Ordering::Relaxed);
                 Some(EventBrokerPauseGuard::new(self, true))
             }
         }
@@ -750,6 +770,8 @@ mod tests {
             assert!(broker.is_paused());
         }
         assert!(!broker.is_paused());
+        let stats = broker.drain_stats();
+        assert!(stats.cursor_query_paused > 0);
     }
 
     #[tokio::test(flavor = "current_thread")]
@@ -764,6 +786,8 @@ mod tests {
             assert!(broker.is_paused());
         }
         assert!(broker.is_paused());
+        let stats = broker.drain_stats();
+        assert!(stats.cursor_query_paused > 0);
     }
 
     #[tokio::test(flavor = "current_thread")]
@@ -772,6 +796,8 @@ mod tests {
 
         broker.polling_active.store(true, Ordering::Release);
         assert!(broker.pause_for_cursor_query().is_none());
+        let stats = broker.drain_stats();
+        assert_eq!(stats.cursor_query_skipped, 1);
     }
 }
 #[derive(Default)]
@@ -779,6 +805,8 @@ struct EventBrokerStats {
     lock_contended: AtomicU64,
     poll_in_flight: AtomicU64,
     restarts: AtomicU64,
+    cursor_query_paused: AtomicU64,
+    cursor_query_skipped: AtomicU64,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -786,6 +814,8 @@ pub struct EventBrokerStatsSnapshot {
     pub lock_contended: u64,
     pub poll_in_flight: u64,
     pub restarts: u64,
+    pub cursor_query_paused: u64,
+    pub cursor_query_skipped: u64,
 }
 
 impl EventBrokerStats {
@@ -794,6 +824,8 @@ impl EventBrokerStats {
             lock_contended: self.lock_contended.swap(0, Ordering::Relaxed),
             poll_in_flight: self.poll_in_flight.swap(0, Ordering::Relaxed),
             restarts: self.restarts.swap(0, Ordering::Relaxed),
+            cursor_query_paused: self.cursor_query_paused.swap(0, Ordering::Relaxed),
+            cursor_query_skipped: self.cursor_query_skipped.swap(0, Ordering::Relaxed),
         }
     }
 }

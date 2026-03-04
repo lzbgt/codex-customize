@@ -859,6 +859,8 @@ impl App {
                     lock_contended = stats.lock_contended,
                     poll_in_flight = stats.poll_in_flight,
                     restarts = stats.restarts,
+                    cursor_query_paused = stats.cursor_query_paused,
+                    cursor_query_skipped = stats.cursor_query_skipped,
                     "ui watchdog restarting event stream after prolonged idle"
                 );
                 self.last_watchdog_recovery_at = Some(Instant::now());
