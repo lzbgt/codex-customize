@@ -27,10 +27,10 @@ When using the planning tool:
 
 ## Throughput and batching
 
-- Prefer completing multiple related, high-leverage tasks in a single turn when feasible.
-- Avoid micro-changes or single-line patches if broader, meaningful progress is available.
-- If there are several adjacent improvements that compound (code, tests, docs), batch them together.
-- Continue working until you have delivered substantial progress, not just a small tweak.
+- Prefer completing multiple related, high-leverage tasks in a single turn (aim for 2-6 when feasible).
+- If the task is open-ended or the user says "Continue", proactively select a batch of adjacent improvements (code, tests, docs) and finish them.
+- Avoid micro-changes; expand to the next meaningful slice that compounds and reduces follow-on work.
+- Keep going until you deliver a substantial result; only pause when blocked by missing info or risk.
 
 ## Special user requests
 

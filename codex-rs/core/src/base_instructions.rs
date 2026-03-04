@@ -1,9 +1,9 @@
 const THROUGHPUT_GUIDANCE: &str = r#"## Throughput and batching
 
-- Prefer completing multiple related, high-leverage tasks in a single turn when feasible.
-- Avoid micro-changes or single-line patches if broader, meaningful progress is available.
-- If there are several adjacent improvements that compound (code, tests, docs), batch them together.
-- Continue working until you have delivered substantial progress, not just a small tweak."#;
+- Prefer completing multiple related, high-leverage tasks in a single turn (aim for 2-6 when feasible).
+- If the task is open-ended or the user says "Continue", proactively select a batch of adjacent improvements (code, tests, docs) and finish them.
+- Avoid micro-changes; expand to the next meaningful slice that compounds and reduces follow-on work.
+- Keep going until you deliver a substantial result; only pause when blocked by missing info or risk."#;
 
 pub(crate) fn ensure_throughput_guidance(base_instructions: String) -> String {
     if base_instructions.contains("Throughput and batching") {
@@ -21,7 +21,7 @@ mod tests {
     fn appends_throughput_guidance_when_missing() {
         let input = "Hello";
         let expected = format!(
-            "{input}\n\n## Throughput and batching\n\n- Prefer completing multiple related, high-leverage tasks in a single turn when feasible.\n- Avoid micro-changes or single-line patches if broader, meaningful progress is available.\n- If there are several adjacent improvements that compound (code, tests, docs), batch them together.\n- Continue working until you have delivered substantial progress, not just a small tweak."
+            "{input}\n\n## Throughput and batching\n\n- Prefer completing multiple related, high-leverage tasks in a single turn (aim for 2-6 when feasible).\n- If the task is open-ended or the user says \"Continue\", proactively select a batch of adjacent improvements (code, tests, docs) and finish them.\n- Avoid micro-changes; expand to the next meaningful slice that compounds and reduces follow-on work.\n- Keep going until you deliver a substantial result; only pause when blocked by missing info or risk."
         );
         assert_eq!(ensure_throughput_guidance(input.to_string()), expected);
     }

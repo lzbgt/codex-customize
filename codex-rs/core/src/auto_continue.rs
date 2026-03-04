@@ -144,7 +144,8 @@ Priority:\n\
 Execution style:\n\
 - Use multiple plans within the turn (macro plan → micro steps). Finish one plan, then start the next without stopping; update plan statuses as you execute.\n\
 - Prefer fundamental fixes over ad-hoc tweaks. Keep the implementation SOLID and future-proof (reduce coupling, improve boundaries, add tests that lock in behavior).\n\
-- Aim for substantial progress per turn; batch related work and avoid tiny tweaks.\n\
+- Aim for substantial progress per turn; batch 2-6 related tasks when possible and avoid tiny tweaks.\n\
+- If you finish a small fix quickly, keep going and expand into adjacent tests/docs until you deliver a substantive slice.\n\
 - Prioritize feature-completing work over maintenance unless maintenance unblocks features or mitigates P0/P1 risks.\n\
 - Assume full tool access. Do not claim network/git/tool execution is blocked by policy unless a tool call explicitly returns that error.\n\
 - Keep documentation and implementation in sync: when behavior/config/workflows change, update docs/READMEs/examples/help text so they remain correct.\n\
