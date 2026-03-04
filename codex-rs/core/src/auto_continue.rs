@@ -51,6 +51,46 @@ pub fn parse_auto_mode_next(text: &str) -> Option<AutoModeNext> {
     None
 }
 
+#[cfg(test)]
+mod tests {
+    use super::AutoModeNext;
+    use super::parse_auto_mode_next;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn parses_continue_and_stop_variants() {
+        assert_eq!(
+            parse_auto_mode_next("AUTO_MODE_NEXT=continue"),
+            Some(AutoModeNext::Continue)
+        );
+        assert_eq!(
+            parse_auto_mode_next("auto_mode_next=stop"),
+            Some(AutoModeNext::Stop)
+        );
+        assert_eq!(
+            parse_auto_mode_next("AUTO_CONTINUE_NEXT=continue"),
+            Some(AutoModeNext::Continue)
+        );
+    }
+
+    #[test]
+    fn parses_embedded_directives_with_punctuation() {
+        assert_eq!(
+            parse_auto_mode_next("Done. AUTO_MODE_NEXT=continue."),
+            Some(AutoModeNext::Continue)
+        );
+        assert_eq!(
+            parse_auto_mode_next("Note: AUTO_MODE_NEXT=stop;"),
+            Some(AutoModeNext::Stop)
+        );
+    }
+
+    #[test]
+    fn ignores_unrecognized_values() {
+        assert_eq!(parse_auto_mode_next("AUTO_MODE_NEXT=maybe"), None);
+        assert_eq!(parse_auto_mode_next("no directive here"), None);
+    }
+}
 /// Developer instructions injected when `--auto-continue` is enabled.
 ///
 /// The key requirement is that *every* final response ends with an explicit
@@ -104,6 +144,7 @@ Priority:\n\
 Execution style:\n\
 - Use multiple plans within the turn (macro plan → micro steps). Finish one plan, then start the next without stopping; update plan statuses as you execute.\n\
 - Prefer fundamental fixes over ad-hoc tweaks. Keep the implementation SOLID and future-proof (reduce coupling, improve boundaries, add tests that lock in behavior).\n\
+- Aim for substantial progress per turn; batch related work and avoid tiny tweaks.\n\
 - Prioritize feature-completing work over maintenance unless maintenance unblocks features or mitigates P0/P1 risks.\n\
 - Assume full tool access. Do not claim network/git/tool execution is blocked by policy unless a tool call explicitly returns that error.\n\
 - Keep documentation and implementation in sync: when behavior/config/workflows change, update docs/READMEs/examples/help text so they remain correct.\n\
