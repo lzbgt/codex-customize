@@ -170,6 +170,50 @@ impl FeatureOverrides {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+    use std::collections::BTreeMap;
+
+    #[test]
+    fn overrides_enable_features_without_legacy_usage() {
+        let cfg = ConfigToml::default();
+        let profile = ConfigProfile::default();
+        let overrides = FeatureOverrides {
+            include_apply_patch_tool: Some(true),
+            web_search_request: Some(true),
+        };
+
+        let features = Features::from_config(&cfg, &profile, overrides);
+
+        assert!(features.enabled(Feature::ApplyPatchFreeform));
+        assert!(features.enabled(Feature::WebSearchRequest));
+        assert_eq!(features.legacy_feature_usages().count(), 0);
+    }
+
+    #[test]
+    fn overrides_can_disable_configured_features() {
+        let mut entries = BTreeMap::new();
+        entries.insert("apply_patch_freeform".to_string(), true);
+        entries.insert("web_search_request".to_string(), true);
+        let cfg = ConfigToml {
+            features: Some(FeaturesToml { entries }),
+            ..Default::default()
+        };
+        let profile = ConfigProfile::default();
+        let overrides = FeatureOverrides {
+            include_apply_patch_tool: Some(false),
+            web_search_request: Some(false),
+        };
+
+        let features = Features::from_config(&cfg, &profile, overrides);
+
+        assert!(!features.enabled(Feature::ApplyPatchFreeform));
+        assert!(!features.enabled(Feature::WebSearchRequest));
+    }
+}
+
 impl Features {
     /// Starts with built-in defaults.
     pub fn with_defaults() -> Self {

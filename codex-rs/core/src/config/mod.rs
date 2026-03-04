@@ -2320,6 +2320,30 @@ trust_level = "trusted"
     }
 
     #[test]
+    fn overrides_enable_web_search_request_without_legacy_usage() -> std::io::Result<()> {
+        let codex_home = TempDir::new()?;
+        let cfg = ConfigToml::default();
+        let overrides = ConfigOverrides {
+            include_apply_patch_tool: Some(true),
+            tools_web_search_request: Some(true),
+            ..ConfigOverrides::default()
+        };
+
+        let config = Config::load_from_base_config_with_overrides(
+            cfg,
+            overrides,
+            codex_home.path().to_path_buf(),
+        )?;
+
+        assert!(config.features.enabled(Feature::ApplyPatchFreeform));
+        assert!(config.features.enabled(Feature::WebSearchRequest));
+        assert_eq!(config.web_search_mode, Some(WebSearchMode::Live));
+        assert_eq!(config.features.legacy_feature_usages().count(), 0);
+
+        Ok(())
+    }
+
+    #[test]
     fn profile_legacy_toggles_override_base() -> std::io::Result<()> {
         let codex_home = TempDir::new()?;
         let mut profiles = HashMap::new();
