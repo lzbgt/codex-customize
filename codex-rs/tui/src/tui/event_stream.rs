@@ -46,6 +46,11 @@ fn monotonic_millis() -> u64 {
     start.elapsed().as_millis() as u64
 }
 
+fn monotonic_millis_nonzero() -> u64 {
+    let now = monotonic_millis();
+    if now == 0 { 1 } else { now }
+}
+
 /// Result type produced by an event source.
 pub type EventResult = std::io::Result<Event>;
 
@@ -65,6 +70,7 @@ pub struct EventBroker<S: EventSource = CrosstermEventSource> {
     stats: EventBrokerStats,
     polling_active: AtomicBool,
     polling_active_since_ms: AtomicU64,
+    paused_since_ms: AtomicU64,
 }
 
 /// Tracks state of underlying [`EventSource`].
@@ -114,6 +120,7 @@ impl<S: EventSource + Default> EventBroker<S> {
             stats: EventBrokerStats::default(),
             polling_active: AtomicBool::new(false),
             polling_active_since_ms: AtomicU64::new(0),
+            paused_since_ms: AtomicU64::new(0),
         }
     }
 
@@ -123,7 +130,11 @@ impl<S: EventSource + Default> EventBroker<S> {
             .state
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let was_paused = matches!(&*state, EventBrokerState::Paused);
         *state = EventBrokerState::Paused;
+        if !was_paused {
+            self.record_pause_start();
+        }
     }
 
     /// Create a new instance of the underlying event source
@@ -132,8 +143,12 @@ impl<S: EventSource + Default> EventBroker<S> {
             .state
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let was_paused = matches!(&*state, EventBrokerState::Paused);
         *state = EventBrokerState::Start;
         let _ = self.resume_events_tx.send(());
+        if was_paused {
+            self.record_resume();
+        }
     }
 
     /// Subscribe to a notification that fires whenever [`Self::resume_events`] is called.
@@ -151,6 +166,12 @@ impl<S: EventSource + Default> EventBroker<S> {
             0
         } else {
             monotonic_millis().saturating_sub(since)
+        };
+        let paused_since = self.paused_since_ms.load(Ordering::Acquire);
+        snapshot.paused_ms = if paused_since == 0 {
+            0
+        } else {
+            monotonic_millis().saturating_sub(paused_since)
         };
         snapshot
     }
@@ -182,6 +203,7 @@ impl<S: EventSource + Default> EventBroker<S> {
             }
             EventBrokerState::Start => {
                 *state = EventBrokerState::Paused;
+                self.record_pause_start();
                 self.stats
                     .cursor_query_paused
                     .fetch_add(1, Ordering::Relaxed);
@@ -195,12 +217,26 @@ impl<S: EventSource + Default> EventBroker<S> {
                     return None;
                 }
                 *state = EventBrokerState::Paused;
+                self.record_pause_start();
                 self.stats
                     .cursor_query_paused
                     .fetch_add(1, Ordering::Relaxed);
                 Some(EventBrokerPauseGuard::new(self, true))
             }
         }
+    }
+
+    fn record_pause_start(&self) {
+        self.stats.pause_calls.fetch_add(1, Ordering::Relaxed);
+        let now = monotonic_millis_nonzero();
+        let _ = self
+            .paused_since_ms
+            .compare_exchange(0, now, Ordering::Release, Ordering::Relaxed);
+    }
+
+    fn record_resume(&self) {
+        self.stats.resume_calls.fetch_add(1, Ordering::Relaxed);
+        self.paused_since_ms.store(0, Ordering::Release);
     }
 }
 
@@ -351,7 +387,7 @@ impl<S: EventSource + Default + Unpin> TuiEventStream<S> {
                 self.broker.polling_active.store(true, Ordering::Release);
                 self.broker
                     .polling_active_since_ms
-                    .store(monotonic_millis(), Ordering::Release);
+                    .store(monotonic_millis_nonzero(), Ordering::Release);
                 let poll_result = Pin::new(&mut events).poll_next(cx);
                 self.broker.polling_active.store(false, Ordering::Release);
                 self.broker
@@ -821,6 +857,42 @@ mod tests {
         let stats = broker.drain_stats();
         assert_eq!(stats.cursor_query_skipped, 1);
     }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn pause_and_resume_update_stats() {
+        let (broker, _handle, _draw_tx, _draw_rx, _terminal_focused) = setup();
+
+        broker.pause_events();
+        broker.resume_events();
+
+        let stats = broker.drain_stats();
+        assert_eq!(
+            stats,
+            EventBrokerStatsSnapshot {
+                lock_contended: 0,
+                poll_in_flight: 0,
+                restarts: 0,
+                cursor_query_paused: 0,
+                cursor_query_skipped: 0,
+                polling_active_ms: 0,
+                pause_calls: 1,
+                resume_calls: 1,
+                paused_ms: 0,
+            }
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn paused_duration_reports_while_paused() {
+        let (broker, _handle, _draw_tx, _draw_rx, _terminal_focused) = setup();
+
+        broker.pause_events();
+        tokio::time::sleep(Duration::from_millis(5)).await;
+
+        let stats = broker.drain_stats();
+        assert_eq!(stats.pause_calls, 1);
+        assert!(stats.paused_ms > 0);
+    }
 }
 #[derive(Default)]
 struct EventBrokerStats {
@@ -829,6 +901,8 @@ struct EventBrokerStats {
     restarts: AtomicU64,
     cursor_query_paused: AtomicU64,
     cursor_query_skipped: AtomicU64,
+    pause_calls: AtomicU64,
+    resume_calls: AtomicU64,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -839,6 +913,9 @@ pub struct EventBrokerStatsSnapshot {
     pub cursor_query_paused: u64,
     pub cursor_query_skipped: u64,
     pub polling_active_ms: u64,
+    pub pause_calls: u64,
+    pub resume_calls: u64,
+    pub paused_ms: u64,
 }
 
 impl EventBrokerStats {
@@ -850,6 +927,9 @@ impl EventBrokerStats {
             cursor_query_paused: self.cursor_query_paused.swap(0, Ordering::Relaxed),
             cursor_query_skipped: self.cursor_query_skipped.swap(0, Ordering::Relaxed),
             polling_active_ms: 0,
+            pause_calls: self.pause_calls.swap(0, Ordering::Relaxed),
+            resume_calls: self.resume_calls.swap(0, Ordering::Relaxed),
+            paused_ms: 0,
         }
     }
 }
