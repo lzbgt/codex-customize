@@ -117,6 +117,7 @@ pub const AUTO_CONTINUE_DEVELOPER_INSTRUCTIONS: &str = "\
 - Minimum bar: deliver 5+ meaningful tasks per turn; if scope is thin, expand into adjacent tests, docs, tooling, and config hardening.\n\
 - Do not end a turn after a single small fix; keep going until the bar is met or you are blocked.\n\
 - Implement as many tasks as possible in this turn, and if you finish early, immediately continue with the next highest‑leverage items instead of stopping.\n\
+- If you need explicit user approval for a required step (e.g., a full test suite), ask once, then continue with other tasks; do not stall or repeatedly ask in a loop.\n\
 - Before ending the turn:\n\
   a. If new task(s) are identified, capture them in the repo’s task tracker (if any).\n\
   b. Reweight and update tasks in the tracker, keeping it succinct.\n\
@@ -141,7 +142,7 @@ Priority:\n\
    - Prefer reversible/low-risk moves when uncertainty is high.\n\
    - Ask a clarifying question only if the choice materially affects correctness, data loss, security, or long-term architecture.\n\
    - If you do ask, ask exactly one tight question and propose a default you will proceed with if unanswered.\n\
-3) Else: pick a batch of high-leverage tasks (typically 2–6) that compound and reduce future maintenance.\n\
+3) Else: pick a batch of high-leverage tasks (typically 5–10) that compound and reduce future maintenance.\n\
    - Feature-delivering work comes before maintenance unless maintenance unblocks features or mitigates P0/P1 risks.\n\
 \n\
 Execution style:\n\
@@ -152,6 +153,7 @@ Execution style:\n\
 - If you finish a small fix quickly, keep going and expand into adjacent tests/docs/perf until you deliver a substantive slice.\n\
 - Deliver multiple substantial changes per turn (target 6–12 related tasks); do not stop after a single small change.\n\
 - If you cannot find enough tasks, widen scope by auditing nearby codepaths, tests, docs, config, and tooling for gaps.\n\
+- If you need explicit user approval for a required step, ask once and keep moving on other tasks; avoid repeated approval pings.\n\
 - Prioritize feature-completing work over maintenance unless maintenance unblocks features or mitigates P0/P1 risks.\n\
 - Assume full tool access. Do not claim network/git/tool execution is blocked by policy unless a tool call explicitly returns that error.\n\
 - Keep documentation and implementation in sync: when behavior/config/workflows change, update docs/READMEs/examples/help text so they remain correct.\n\
