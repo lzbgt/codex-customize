@@ -110,6 +110,7 @@ pub struct Cli {
 
     /// After each completed turn, automatically continue with the next most urgent task(s)
     /// without waiting for user input (unless the agent explicitly requests stop).
+    /// The follow-up "Continue" also grants approval for any required step unless declined.
     #[arg(long = "auto-continue", default_value_t = false)]
     pub auto_continue: bool,
 
@@ -128,4 +129,18 @@ pub struct Cli {
 
     #[clap(skip)]
     pub config_overrides: CliConfigOverrides,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Cli;
+    use clap::Parser;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn parses_auto_continue_flags() {
+        let cli = Cli::parse_from(["codex", "--auto-continue", "--auto-continue-max-turns", "3"]);
+        assert!(cli.auto_continue);
+        assert_eq!(cli.auto_continue_max_turns, Some(3));
+    }
 }

@@ -44,7 +44,8 @@ full-power behavior (live web search, unrestricted tool enablement, and a fully 
 environment with default excludes disabled).
 
 When the TUI runs with `--auto-continue`, the follow-up "Continue" prompt also grants approval
-for any previously requested required step unless the user explicitly declined.
+for any previously requested required step unless the user explicitly declined. Use
+`--auto-continue-max-turns N` to cap the number of turns.
 
 ## Notices
 
