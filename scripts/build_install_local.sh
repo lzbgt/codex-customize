@@ -5,6 +5,23 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LOG_DIR="${ROOT_DIR}/build/logs"
 TS="$(date +%Y%m%d_%H%M%S)"
 
+usage() {
+  cat <<'EOF'
+Usage: scripts/build_install_local.sh
+
+Builds codex-cli + apply_patch (release), codesigns on macOS, installs to a local prefix,
+and prunes build outputs. Logs are written under build/logs.
+
+Env:
+  CODEX_INSTALL_PREFIX  Override install prefix (default: /opt/homebrew or /usr/local)
+EOF
+}
+
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  usage
+  exit 0
+fi
+
 mkdir -p "${LOG_DIR}"
 
 log() {

@@ -58,6 +58,8 @@ scripts/build_install_local.sh
 By default it installs to `/opt/homebrew/bin` when available, otherwise `/usr/local/bin`.
 Override with `CODEX_INSTALL_PREFIX=/your/prefix`.
 
+The script writes logs under `build/logs/` for each run.
+
 ## Tracing / verbose logging
 
 Codex is written in Rust, so it honors the `RUST_LOG` environment variable to configure its logging behavior.
