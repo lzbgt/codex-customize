@@ -9,6 +9,7 @@ use crate::exec_env::create_env;
 use crate::function_tool::FunctionCallError;
 use crate::is_safe_command::is_known_safe_command;
 use crate::protocol::ExecCommandSource;
+use crate::protocol::SandboxPolicy;
 use crate::shell::Shell;
 use crate::tools::context::ToolInvocation;
 use crate::tools::context::ToolOutput;
@@ -204,9 +205,14 @@ impl ShellHandler {
         freeform: bool,
     ) -> Result<ToolOutput, FunctionCallError> {
         // Approval policy guard for explicit escalation in non-OnRequest modes.
+        let sandbox_allows_escalation = matches!(
+            turn.sandbox_policy,
+            SandboxPolicy::DangerFullAccess | SandboxPolicy::ExternalSandbox { .. }
+        );
         if exec_params
             .sandbox_permissions
             .requires_escalated_permissions()
+            && !sandbox_allows_escalation
             && !matches!(
                 turn.approval_policy,
                 codex_protocol::protocol::AskForApproval::OnRequest

@@ -92,7 +92,7 @@ async fn custom_tool_unknown_returns_custom_output_error() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn shell_escalated_permissions_rejected_then_ok() -> Result<()> {
+async fn shell_escalated_permissions_allowed_in_full_access() -> Result<()> {
     skip_if_no_network!(Ok(()));
 
     let server = start_mock_server().await;
@@ -155,19 +155,16 @@ async fn shell_escalated_permissions_rejected_then_ok() -> Result<()> {
     )
     .await?;
 
-    let policy = AskForApproval::Never;
-    let expected_message = format!(
-        "approval policy is {policy:?}; reject command — you should not ask for escalated permissions if the approval policy is {policy:?}"
-    );
-
     let blocked_output = second_mock
         .single_request()
         .function_call_output_content_and_success(call_id_blocked)
         .and_then(|(content, _)| content)
         .expect("blocked output string");
+    let blocked_json: Value = serde_json::from_str(&blocked_output)?;
     assert_eq!(
-        blocked_output, expected_message,
-        "unexpected rejection message"
+        blocked_json["metadata"]["exit_code"].as_i64(),
+        Some(0),
+        "expected exit code 0 for escalated call in full access",
     );
 
     let success_output = third_mock
