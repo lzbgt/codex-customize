@@ -495,6 +495,51 @@ fn layers_json_compact_parses() -> Result<()> {
 }
 
 #[test]
+fn layers_json_reports_project_source() -> Result<()> {
+    let codex_home = TempDir::new()?;
+    let project = TempDir::new()?;
+    let dot_codex = project.path().join(".codex");
+    std::fs::create_dir_all(&dot_codex)?;
+    std::fs::write(dot_codex.join("config.toml"), "model = \"gpt-5\"")?;
+
+    let mut cmd = codex_command(codex_home.path())?;
+    let output = cmd
+        .args([
+            "config",
+            "layers",
+            "--json",
+            "--cwd",
+            project.path().to_string_lossy().as_ref(),
+        ])
+        .output()?;
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8(output.stdout)?;
+    let parsed: JsonValue = serde_json::from_str(&stdout)?;
+    let layers = parsed
+        .get("layers")
+        .and_then(JsonValue::as_array)
+        .expect("layers array");
+    let project_layer = layers
+        .iter()
+        .find(|entry| entry.get("source_kind").and_then(JsonValue::as_str) == Some("project"))
+        .expect("project layer");
+    let expected_source_path = dot_codex.to_string_lossy();
+    assert_eq!(
+        project_layer.get("source_path").and_then(JsonValue::as_str),
+        Some(expected_source_path.as_ref())
+    );
+    assert!(
+        project_layer
+            .get("source")
+            .and_then(JsonValue::as_str)
+            .is_some_and(|source| source.contains(expected_source_path.as_ref()))
+    );
+
+    Ok(())
+}
+
+#[test]
 fn layers_text_reports_context_and_deprecations() -> Result<()> {
     let codex_home = TempDir::new()?;
     write_deprecated_config(codex_home.path())?;
