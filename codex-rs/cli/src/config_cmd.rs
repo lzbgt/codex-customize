@@ -264,14 +264,25 @@ fn print_warnings_json(layers: &ConfigLayerStack) {
     let tools_sources = deprecated_tools_web_search_sources(layers);
     let features_sources = deprecated_features_web_search_sources(layers);
     let unknown_features = unknown_feature_keys(layers);
+    let has_warnings = !instructions_sources.is_empty()
+        || !tools_sources.is_empty()
+        || !features_sources.is_empty()
+        || !unknown_features.is_empty();
 
     let payload = serde_json::json!({
+        "has_warnings": has_warnings,
         "deprecated": {
             "experimental_instructions_file": format_sources_json(&instructions_sources),
             "tools.web_search": format_sources_json(&tools_sources),
             "features.web_search": format_sources_json(&features_sources),
         },
         "unknown_features": unknown_features,
+        "counts": {
+            "experimental_instructions_file": instructions_sources.len(),
+            "tools.web_search": tools_sources.len(),
+            "features.web_search": features_sources.len(),
+            "unknown_features": unknown_features.len(),
+        }
     });
     let output = serde_json::to_string_pretty(&payload).unwrap_or_else(|_| "{}".to_string());
     safe_println!("{output}");

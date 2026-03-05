@@ -87,6 +87,10 @@ fn warnings_json_reports_sources() -> Result<()> {
         .get("deprecated")
         .and_then(JsonValue::as_object)
         .expect("deprecated object");
+    assert_eq!(
+        parsed.get("has_warnings").and_then(JsonValue::as_bool),
+        Some(true)
+    );
     let instructions_sources = deprecated
         .get("experimental_instructions_file")
         .and_then(JsonValue::as_array)
@@ -125,6 +129,31 @@ fn warnings_json_reports_sources() -> Result<()> {
         unknown
             .iter()
             .any(|val| val.as_str() == Some("mystery_flag"))
+    );
+
+    let counts = parsed
+        .get("counts")
+        .and_then(JsonValue::as_object)
+        .expect("counts");
+    assert_eq!(
+        counts
+            .get("experimental_instructions_file")
+            .and_then(JsonValue::as_u64),
+        Some(1)
+    );
+    assert_eq!(
+        counts.get("tools.web_search").and_then(JsonValue::as_u64),
+        Some(1)
+    );
+    assert_eq!(
+        counts
+            .get("features.web_search")
+            .and_then(JsonValue::as_u64),
+        Some(1)
+    );
+    assert_eq!(
+        counts.get("unknown_features").and_then(JsonValue::as_u64),
+        Some(1)
     );
 
     Ok(())
