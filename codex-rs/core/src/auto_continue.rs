@@ -105,15 +105,15 @@ mod tests {
     #[test]
     fn followup_prompt_sets_high_throughput_targets() {
         assert!(
-            AUTO_CONTINUE_FOLLOWUP_PROMPT.contains("24-36"),
+            AUTO_CONTINUE_FOLLOWUP_PROMPT.contains("36-48"),
             "followup prompt should enforce higher batch targets"
         );
         assert!(
-            AUTO_CONTINUE_FOLLOWUP_PROMPT.contains("24+"),
+            AUTO_CONTINUE_FOLLOWUP_PROMPT.contains("36+"),
             "followup prompt should set a minimum task bar"
         );
         assert!(
-            AUTO_CONTINUE_FOLLOWUP_PROMPT.contains("three substantial deliverables"),
+            AUTO_CONTINUE_FOLLOWUP_PROMPT.contains("four substantial deliverables"),
             "followup prompt should require multiple substantial deliverables"
         );
     }
@@ -121,15 +121,15 @@ mod tests {
     #[test]
     fn developer_instructions_set_high_throughput_targets() {
         assert!(
-            AUTO_CONTINUE_DEVELOPER_INSTRUCTIONS.contains("24-36"),
+            AUTO_CONTINUE_DEVELOPER_INSTRUCTIONS.contains("36-48"),
             "developer instructions should align with higher batch targets"
         );
         assert!(
-            AUTO_CONTINUE_DEVELOPER_INSTRUCTIONS.contains("24+"),
+            AUTO_CONTINUE_DEVELOPER_INSTRUCTIONS.contains("36+"),
             "developer instructions should set a minimum task bar"
         );
         assert!(
-            AUTO_CONTINUE_DEVELOPER_INSTRUCTIONS.contains("three substantial deliverables"),
+            AUTO_CONTINUE_DEVELOPER_INSTRUCTIONS.contains("four substantial deliverables"),
             "developer instructions should require multiple substantial deliverables"
         );
     }
@@ -156,10 +156,10 @@ pub const AUTO_CONTINUE_DEVELOPER_INSTRUCTIONS: &str = "\
 - If the previous turn surfaced important proposals/next steps, prioritize the most beneficial one first, then keep going with other high-leverage items while context is fresh.\n\
 - Use the planning tool (`update_plan`) actively: create a macro plan early, refine into micro-steps, and use multiple plans per turn when it improves throughput (finish one plan, then start the next).\n\
 - When multiple tasks remain, prefer batching several into one coherent patch while context is fresh. Aim for substantial progress (often hundreds to ~1000+ lines across code + docs) rather than stopping after tiny edits. Do not inflate line count with churn—make meaningful changes.\n\
-- Make each turn dense: complete a cluster of related tasks (prefer 24-36) including implementation + tests + docs + verification; avoid one-off micro fixes.\n\
-- Minimum bar: deliver 24+ meaningful tasks per turn; if scope is thin, expand into adjacent tests, docs, tooling, and config hardening.\n\
+- Make each turn dense: complete a cluster of related tasks (prefer 36-48) including implementation + tests + docs + verification; avoid one-off micro fixes.\n\
+- Minimum bar: deliver 36+ meaningful tasks per turn; if scope is thin, expand into adjacent tests, docs, tooling, and config hardening.\n\
 - Do not end a turn after a single small fix; keep going until the bar is met or you are blocked.\n\
-- Aim for at least three substantial deliverables per turn (feature or behavior changes plus tests/docs) unless blocked.\n\
+- Aim for at least four substantial deliverables per turn (feature or behavior changes plus tests/docs) unless blocked.\n\
 - Implement as many tasks as possible in this turn, and if you finish early, immediately continue with the next highest‑leverage items instead of stopping.\n\
 - If you need explicit user approval for a required step (e.g., a full test suite), ask once, then continue with other tasks; do not stall or repeatedly ask in a loop.\n\
 - Before ending the turn:\n\
@@ -190,17 +190,17 @@ Priority:\n\
    - Prefer reversible/low-risk moves when uncertainty is high.\n\
    - Ask a clarifying question only if the choice materially affects correctness, data loss, security, or long-term architecture.\n\
    - If you do ask, ask exactly one tight question and propose a default you will proceed with if unanswered.\n\
-3) Else: pick a batch of high-leverage tasks (typically 24-36) that compound and reduce future maintenance.\n\
+3) Else: pick a batch of high-leverage tasks (typically 36-48) that compound and reduce future maintenance.\n\
    - Feature-delivering work comes before maintenance unless maintenance unblocks features or mitigates P0/P1 risks.\n\
 \n\
 Execution style:\n\
 - Use multiple plans within the turn (macro plan → micro steps). Finish one plan, then start the next without stopping; update plan statuses as you execute.\n\
 - Prefer fundamental fixes over ad-hoc tweaks. Keep the implementation SOLID and future-proof (reduce coupling, improve boundaries, add tests that lock in behavior).\n\
-- Aim for substantial progress per turn; batch 24-36 related tasks when possible and avoid tiny tweaks.\n\
-- Minimum bar: deliver 24+ meaningful tasks per turn (code + tests + docs or adjacent feature work).\n\
+- Aim for substantial progress per turn; batch 36-48 related tasks when possible and avoid tiny tweaks.\n\
+- Minimum bar: deliver 36+ meaningful tasks per turn (code + tests + docs or adjacent feature work).\n\
 - If you finish a small fix quickly, keep going and expand into adjacent tests/docs/perf until you deliver a substantive slice.\n\
-- Deliver multiple substantial changes per turn (target 24-36 related tasks); do not stop after a single small change.\n\
-- Aim for at least three substantial deliverables per turn unless blocked; if not possible, explain the blocker.\n\
+- Deliver multiple substantial changes per turn (target 36-48 related tasks); do not stop after a single small change.\n\
+- Aim for at least four substantial deliverables per turn unless blocked; if not possible, explain the blocker.\n\
 - If you cannot find enough tasks, widen scope by auditing nearby codepaths, tests, docs, config, and tooling for gaps.\n\
 - If you need explicit user approval for a required step, ask once and keep moving on other tasks; avoid repeated approval pings.\n\
 - Prioritize feature-completing work over maintenance unless maintenance unblocks features or mitigates P0/P1 risks.\n\

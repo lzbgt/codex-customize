@@ -50,7 +50,7 @@ restrictions in YOLO; the user accepts the risk and relies on the host security 
 
 When the TUI runs with `--auto-continue`, the follow-up "Continue" prompt also grants approval
 for any previously requested required step unless the user explicitly declined. The follow-up
-prompt targets 24-36 related tasks per turn (minimum 24). Use `--auto-continue-max-turns N` to cap
+prompt targets 36-48 related tasks per turn (minimum 36). Use `--auto-continue-max-turns N` to cap
 the number of turns.
 
 ## Notices
