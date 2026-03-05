@@ -57,7 +57,8 @@ Use the CLI to inspect which configuration layers are active and to surface depr
   Both JSON payloads include `profile` and `cwd` metadata for context.
 
 Pass `--profile` to target a specific profile or `--cwd` to resolve project layers for a
-different working directory.
+different working directory. These flags can be placed before or after the `layers`/`warnings`
+subcommand.
 
 Example: `codex config layers --json`
 
