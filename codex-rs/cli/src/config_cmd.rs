@@ -34,10 +34,24 @@ pub struct ConfigCli {
 #[derive(Debug, clap::Subcommand)]
 pub enum ConfigSubcommand {
     /// Show configuration layers (highest precedence first).
-    Layers,
+    Layers(ConfigLayersArgs),
 
     /// Show deprecated keys and unknown feature warnings.
-    Warnings,
+    Warnings(ConfigWarningsArgs),
+}
+
+#[derive(Debug, Parser)]
+pub struct ConfigLayersArgs {
+    /// Emit the layer summary as JSON.
+    #[arg(long = "json")]
+    pub json: bool,
+}
+
+#[derive(Debug, Parser)]
+pub struct ConfigWarningsArgs {
+    /// Emit warnings as JSON.
+    #[arg(long = "json")]
+    pub json: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -80,15 +94,22 @@ impl ConfigCli {
                 .context("failed to load configuration")?;
 
         match subcommand {
-            ConfigSubcommand::Layers => print_layers(&config),
-            ConfigSubcommand::Warnings => print_warnings(&config.config_layer_stack),
+            ConfigSubcommand::Layers(args) => print_layers(&config, args.json),
+            ConfigSubcommand::Warnings(args) => {
+                print_warnings(&config.config_layer_stack, args.json);
+            }
         }
 
         Ok(())
     }
 }
 
-fn print_layers(config: &Config) {
+fn print_layers(config: &Config, as_json: bool) {
+    if as_json {
+        print_layers_json(config);
+        return;
+    }
+
     safe_println!("Config layers (high → low precedence):");
     if let Some(profile) = config.active_profile.as_deref() {
         safe_println!("Profile: {profile}");
@@ -134,7 +155,12 @@ fn print_layers(config: &Config) {
     }
 }
 
-fn print_warnings(layers: &ConfigLayerStack) {
+fn print_warnings(layers: &ConfigLayerStack, as_json: bool) {
+    if as_json {
+        print_warnings_json(layers);
+        return;
+    }
+
     let instructions_sources = deprecated_instructions_file_sources(layers);
     let tools_sources = deprecated_tools_web_search_sources(layers);
     let features_sources = deprecated_features_web_search_sources(layers);
@@ -191,4 +217,65 @@ fn format_sources(sources: &[codex_app_server_protocol::ConfigLayerSource]) -> S
         .map(describe_layer_source)
         .collect::<Vec<_>>()
         .join(", ")
+}
+
+fn print_layers_json(config: &Config) {
+    let layers = config
+        .config_layer_stack
+        .get_layers(ConfigLayerStackOrdering::HighestPrecedenceFirst, true);
+    let instructions_sources = deprecated_instructions_file_sources(&config.config_layer_stack);
+    let tools_sources = deprecated_tools_web_search_sources(&config.config_layer_stack);
+    let features_sources = deprecated_features_web_search_sources(&config.config_layer_stack);
+
+    let layers_json = layers
+        .iter()
+        .map(|layer| {
+            let mut deprecated = Vec::new();
+            if instructions_sources.contains(&layer.name) {
+                deprecated.push("experimental_instructions_file");
+            }
+            if tools_sources.contains(&layer.name) {
+                deprecated.push("tools.web_search");
+            }
+            if features_sources.contains(&layer.name) {
+                deprecated.push("features.web_search");
+            }
+            serde_json::json!({
+                "source": describe_layer_source(&layer.name),
+                "version": layer.version,
+                "disabled_reason": layer.disabled_reason,
+                "deprecated_keys": deprecated,
+            })
+        })
+        .collect::<Vec<_>>();
+
+    let payload = serde_json::json!({
+        "profile": config.active_profile.clone(),
+        "cwd": config.cwd,
+        "layers": layers_json,
+    });
+    let output = serde_json::to_string_pretty(&payload).unwrap_or_else(|_| "{}".to_string());
+    safe_println!("{output}");
+}
+
+fn print_warnings_json(layers: &ConfigLayerStack) {
+    let instructions_sources = deprecated_instructions_file_sources(layers);
+    let tools_sources = deprecated_tools_web_search_sources(layers);
+    let features_sources = deprecated_features_web_search_sources(layers);
+    let unknown_features = unknown_feature_keys(layers);
+
+    let payload = serde_json::json!({
+        "deprecated": {
+            "experimental_instructions_file": format_sources_json(&instructions_sources),
+            "tools.web_search": format_sources_json(&tools_sources),
+            "features.web_search": format_sources_json(&features_sources),
+        },
+        "unknown_features": unknown_features,
+    });
+    let output = serde_json::to_string_pretty(&payload).unwrap_or_else(|_| "{}".to_string());
+    safe_println!("{output}");
+}
+
+fn format_sources_json(sources: &[codex_app_server_protocol::ConfigLayerSource]) -> Vec<String> {
+    sources.iter().map(describe_layer_source).collect()
 }

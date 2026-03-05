@@ -2,6 +2,7 @@ use std::fs;
 use std::path::Path;
 
 use anyhow::Result;
+use serde_json::Value as JsonValue;
 use tempfile::TempDir;
 
 mod common;
@@ -64,6 +65,101 @@ fn layers_include_deprecated_keys_per_layer() -> Result<()> {
     assert!(stdout.contains(
         "deprecated=experimental_instructions_file, tools.web_search, features.web_search"
     ));
+
+    Ok(())
+}
+
+#[test]
+fn warnings_json_reports_sources() -> Result<()> {
+    let codex_home = TempDir::new()?;
+    write_deprecated_config(codex_home.path())?;
+
+    let mut cmd = codex_command(codex_home.path())?;
+    let output = cmd.args(["config", "warnings", "--json"]).output()?;
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8(output.stdout)?;
+    let parsed: JsonValue = serde_json::from_str(&stdout)?;
+    let expected_path = codex_home.path().join("config.toml");
+    let expected_source = format!("user:{}", expected_path.display());
+
+    let deprecated = parsed
+        .get("deprecated")
+        .and_then(JsonValue::as_object)
+        .expect("deprecated object");
+    let instructions_sources = deprecated
+        .get("experimental_instructions_file")
+        .and_then(JsonValue::as_array)
+        .expect("instructions sources");
+    assert!(
+        instructions_sources
+            .iter()
+            .any(|val| val.as_str() == Some(expected_source.as_str()))
+    );
+
+    let tools_sources = deprecated
+        .get("tools.web_search")
+        .and_then(JsonValue::as_array)
+        .expect("tools sources");
+    assert!(
+        tools_sources
+            .iter()
+            .any(|val| val.as_str() == Some(expected_source.as_str()))
+    );
+
+    let features_sources = deprecated
+        .get("features.web_search")
+        .and_then(JsonValue::as_array)
+        .expect("features sources");
+    assert!(
+        features_sources
+            .iter()
+            .any(|val| val.as_str() == Some(expected_source.as_str()))
+    );
+
+    let unknown = parsed
+        .get("unknown_features")
+        .and_then(JsonValue::as_array)
+        .expect("unknown features");
+    assert!(
+        unknown
+            .iter()
+            .any(|val| val.as_str() == Some("mystery_flag"))
+    );
+
+    Ok(())
+}
+
+#[test]
+fn layers_json_reports_deprecated_keys() -> Result<()> {
+    let codex_home = TempDir::new()?;
+    write_deprecated_config(codex_home.path())?;
+
+    let mut cmd = codex_command(codex_home.path())?;
+    let output = cmd.args(["config", "layers", "--json"]).output()?;
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8(output.stdout)?;
+    let parsed: JsonValue = serde_json::from_str(&stdout)?;
+    let expected_path = codex_home.path().join("config.toml");
+    let expected_source = format!("user:{}", expected_path.display());
+
+    let layers = parsed
+        .get("layers")
+        .and_then(JsonValue::as_array)
+        .expect("layers array");
+    let layer = layers
+        .iter()
+        .find(|entry| entry.get("source").and_then(JsonValue::as_str) == Some(&expected_source))
+        .expect("user layer");
+    let deprecated = layer
+        .get("deprecated_keys")
+        .and_then(JsonValue::as_array)
+        .expect("deprecated keys");
+    let deprecated_values: Vec<_> = deprecated.iter().filter_map(JsonValue::as_str).collect();
+    assert!(deprecated_values.contains(&"experimental_instructions_file"));
+    assert!(deprecated_values.contains(&"tools.web_search"));
+    assert!(deprecated_values.contains(&"features.web_search"));
 
     Ok(())
 }

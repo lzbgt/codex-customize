@@ -47,6 +47,7 @@ Use the CLI to inspect which configuration layers are active and to surface depr
 - `codex config layers` shows the active config layers (highest precedence first), including
   disabled layers and any deprecated keys detected per layer.
 - `codex config warnings` summarizes deprecated keys and unknown `[features]` entries.
+- Use `--json` with either subcommand to emit machine-readable output.
 
 Pass `--profile` to target a specific profile or `--cwd` to resolve project layers for a
 different working directory.
