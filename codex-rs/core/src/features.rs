@@ -148,7 +148,6 @@ pub struct Features {
 #[derive(Debug, Clone, Default)]
 pub struct FeatureOverrides {
     pub include_apply_patch_tool: Option<bool>,
-    pub web_search_request: Option<bool>,
 }
 
 impl FeatureOverrides {
@@ -158,13 +157,6 @@ impl FeatureOverrides {
                 features.enable(Feature::ApplyPatchFreeform);
             } else {
                 features.disable(Feature::ApplyPatchFreeform);
-            }
-        }
-        if let Some(enabled) = self.web_search_request {
-            if enabled {
-                features.enable(Feature::WebSearchRequest);
-            } else {
-                features.disable(Feature::WebSearchRequest);
             }
         }
     }
@@ -182,13 +174,11 @@ mod tests {
         let profile = ConfigProfile::default();
         let overrides = FeatureOverrides {
             include_apply_patch_tool: Some(true),
-            web_search_request: Some(true),
         };
 
         let features = Features::from_config(&cfg, &profile, overrides);
 
         assert!(features.enabled(Feature::ApplyPatchFreeform));
-        assert!(features.enabled(Feature::WebSearchRequest));
         assert_eq!(features.legacy_feature_usages().count(), 0);
     }
 
@@ -204,13 +194,12 @@ mod tests {
         let profile = ConfigProfile::default();
         let overrides = FeatureOverrides {
             include_apply_patch_tool: Some(false),
-            web_search_request: Some(false),
         };
 
         let features = Features::from_config(&cfg, &profile, overrides);
 
         assert!(!features.enabled(Feature::ApplyPatchFreeform));
-        assert!(!features.enabled(Feature::WebSearchRequest));
+        assert!(features.enabled(Feature::WebSearchRequest));
     }
 }
 

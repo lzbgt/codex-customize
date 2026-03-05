@@ -1175,7 +1175,6 @@ pub struct ConfigOverrides {
     pub compact_prompt: Option<String>,
     pub include_apply_patch_tool: Option<bool>,
     pub show_raw_agent_reasoning: Option<bool>,
-    pub tools_web_search_request: Option<bool>,
     pub tools_view_image: Option<bool>,
     /// Additional directories that should be treated as writable roots for this session.
     pub additional_writable_roots: Vec<PathBuf>,
@@ -1266,7 +1265,6 @@ impl Config {
             compact_prompt,
             include_apply_patch_tool: include_apply_patch_tool_override,
             show_raw_agent_reasoning,
-            tools_web_search_request: override_tools_web_search_request,
             tools_view_image: override_tools_view_image,
             additional_writable_roots,
             disable_exec_policy,
@@ -1292,7 +1290,6 @@ impl Config {
 
         let feature_overrides = FeatureOverrides {
             include_apply_patch_tool: include_apply_patch_tool_override,
-            web_search_request: override_tools_web_search_request,
         };
 
         let mut features = Features::from_config(&cfg, &config_profile, feature_overrides);
@@ -2325,18 +2322,19 @@ trust_level = "trusted"
     }
 
     #[test]
-    fn overrides_enable_web_search_request_without_legacy_usage() -> std::io::Result<()> {
+    fn config_features_enable_web_search_request_without_legacy_usage() -> std::io::Result<()> {
         let codex_home = TempDir::new()?;
-        let cfg = ConfigToml::default();
-        let overrides = ConfigOverrides {
-            include_apply_patch_tool: Some(true),
-            tools_web_search_request: Some(true),
-            ..ConfigOverrides::default()
+        let mut entries = BTreeMap::new();
+        entries.insert("apply_patch_freeform".to_string(), true);
+        entries.insert("web_search_request".to_string(), true);
+        let cfg = ConfigToml {
+            features: Some(FeaturesToml { entries }),
+            ..Default::default()
         };
 
         let config = Config::load_from_base_config_with_overrides(
             cfg,
-            overrides,
+            ConfigOverrides::default(),
             codex_home.path().to_path_buf(),
         )?;
 

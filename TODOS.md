@@ -42,10 +42,10 @@ This file tracks high-impact work items for this repo. Ordering is by priority (
 - Release broker lock while polling the event source (avoid pause/resume lock contention).
 - Built, codesigned, and installed macOS `codex` + `apply_patch` (Homebrew prefix), and produced versioned Linux x64 + Windows x64 zip artifacts in `dist/`.
 - YOLO now hard-enables shell/unified_exec/apply_patch/view_image/web_search with explicit full-access help text and disabled exec-policy enforcement.
-- Auto-continue prompts now enforce 5+ tasks per turn and explicit scope expansion into tests/docs when needed.
+- Auto-continue prompts now enforce 12+ tasks per turn and explicit scope expansion into tests/docs when needed.
 - Centralized YOLO override handling and ensured it replaces conflicting config/CLI overrides for full-power behavior.
 - TUI `--search` override now replaces conflicting `web_search` config entries, and CLI override precedence documented.
-- Auto-continue guidance now warns against approval-loop stalls and aligns batch targets to 5–10 tasks.
+- Auto-continue guidance now warns against approval-loop stalls and aligns batch targets to 12-18 tasks.
 - Auto-continue follow-up prompt now treats "Continue" as approval for pending required steps.
 - Auto-continue approval semantics documented in README.
 - TUI auto-continue flag help and docs mention approval semantics and max-turns cap.
@@ -54,10 +54,11 @@ This file tracks high-impact work items for this repo. Ordering is by priority (
 - Added `just build-install-local` target for repeatable local build/install.
 - YOLO now force-resets shell environment policy overrides to ensure full env inheritance.
 - YOLO CLI help text now mentions full env inheritance behavior.
-- Auto-continue guidance now targets 8+ tasks per turn and at least two substantial deliverables.
+- Auto-continue guidance now targets 12+ tasks per turn and at least three substantial deliverables.
 - Removed legacy web_search override usage in exec/tui; clarified deprecation docs and SDK comment.
 - Removed `[tools].web_search` config plumbing; migrated config RPC tests to `web_search` mode.
 - Removed legacy `[features].web_search` alias handling.
+- Removed `tools_web_search_request` overrides from config harness.
 - Added EventBroker pause/resume/paused-duration stats and watchdog logging for hang triage.
 - Added macOS hang capture helper, SIGUSR1 diagnostics, and TUI hang debugging doc.
 - Honored `tools.view_image`/profile overrides by gating the tool registry, with coverage tests.
