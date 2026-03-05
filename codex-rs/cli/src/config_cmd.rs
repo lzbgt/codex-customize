@@ -96,7 +96,7 @@ impl ConfigCli {
         match subcommand {
             ConfigSubcommand::Layers(args) => print_layers(&config, args.json),
             ConfigSubcommand::Warnings(args) => {
-                print_warnings(&config.config_layer_stack, args.json);
+                print_warnings(&config, args.json);
             }
         }
 
@@ -155,16 +155,16 @@ fn print_layers(config: &Config, as_json: bool) {
     }
 }
 
-fn print_warnings(layers: &ConfigLayerStack, as_json: bool) {
+fn print_warnings(config: &Config, as_json: bool) {
     if as_json {
-        print_warnings_json(layers);
+        print_warnings_json(config);
         return;
     }
 
-    let instructions_sources = deprecated_instructions_file_sources(layers);
-    let tools_sources = deprecated_tools_web_search_sources(layers);
-    let features_sources = deprecated_features_web_search_sources(layers);
-    let unknown_features = unknown_feature_keys(layers);
+    let instructions_sources = deprecated_instructions_file_sources(&config.config_layer_stack);
+    let tools_sources = deprecated_tools_web_search_sources(&config.config_layer_stack);
+    let features_sources = deprecated_features_web_search_sources(&config.config_layer_stack);
+    let unknown_features = unknown_feature_keys(&config.config_layer_stack);
 
     let mut warned = false;
 
@@ -261,17 +261,19 @@ fn print_layers_json(config: &Config) {
     safe_println!("{output}");
 }
 
-fn print_warnings_json(layers: &ConfigLayerStack) {
-    let instructions_sources = deprecated_instructions_file_sources(layers);
-    let tools_sources = deprecated_tools_web_search_sources(layers);
-    let features_sources = deprecated_features_web_search_sources(layers);
-    let unknown_features = unknown_feature_keys(layers);
+fn print_warnings_json(config: &Config) {
+    let instructions_sources = deprecated_instructions_file_sources(&config.config_layer_stack);
+    let tools_sources = deprecated_tools_web_search_sources(&config.config_layer_stack);
+    let features_sources = deprecated_features_web_search_sources(&config.config_layer_stack);
+    let unknown_features = unknown_feature_keys(&config.config_layer_stack);
     let has_warnings = !instructions_sources.is_empty()
         || !tools_sources.is_empty()
         || !features_sources.is_empty()
         || !unknown_features.is_empty();
 
     let payload = serde_json::json!({
+        "profile": config.active_profile.clone(),
+        "cwd": config.cwd,
         "has_warnings": has_warnings,
         "deprecated": {
             "experimental_instructions_file": format_sources_json(&instructions_sources),
