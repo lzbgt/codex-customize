@@ -435,3 +435,27 @@ fn warnings_json_compact_parses() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn layers_json_compact_parses() -> Result<()> {
+    let codex_home = TempDir::new()?;
+
+    let mut cmd = codex_command(codex_home.path())?;
+    let output = cmd
+        .args(["config", "layers", "--json", "--compact"])
+        .output()?;
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8(output.stdout)?;
+    assert!(!stdout.contains('\n'));
+    let parsed: JsonValue = serde_json::from_str(&stdout)?;
+    assert_eq!(
+        parsed.get("layer_count").and_then(JsonValue::as_u64),
+        parsed
+            .get("layers")
+            .and_then(JsonValue::as_array)
+            .map(|layers| layers.len() as u64)
+    );
+
+    Ok(())
+}
