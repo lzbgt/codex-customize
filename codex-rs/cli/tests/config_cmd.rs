@@ -99,7 +99,7 @@ fn warnings_json_reports_sources() -> Result<()> {
         .get("deprecated")
         .and_then(JsonValue::as_object)
         .expect("deprecated object");
-    assert!(parsed.get("profile").is_some());
+    assert_eq!(parsed.get("profile").and_then(JsonValue::as_str), None);
     assert_eq!(
         parsed.get("cwd").and_then(JsonValue::as_str),
         Some(cwd.to_string_lossy().as_ref())
@@ -315,12 +315,22 @@ fn warnings_text_reports_no_warnings() -> Result<()> {
     let codex_home = TempDir::new()?;
 
     let mut cmd = codex_command(codex_home.path())?;
-    let output = cmd.args(["config", "warnings"]).output()?;
+    let cwd = codex_home.path().join("cwd");
+    std::fs::create_dir_all(&cwd)?;
+    let output = cmd
+        .args([
+            "config",
+            "warnings",
+            "--cwd",
+            cwd.to_string_lossy().as_ref(),
+        ])
+        .output()?;
     assert!(output.status.success());
 
     let stdout = String::from_utf8(output.stdout)?;
     assert!(stdout.contains("Config warnings:"));
     assert!(stdout.contains("Profile: (default)"));
+    assert!(stdout.contains(&format!("CWD: {}", cwd.display())));
     assert!(stdout.contains("No configuration warnings found."));
 
     Ok(())
