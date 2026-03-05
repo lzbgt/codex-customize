@@ -42,7 +42,9 @@ where
 
     // Need to ensure the artifact associated with the bash DotSlash file is
     // available before it is run in a read-only sandbox.
-    let status = Command::new("dotslash")
+    let mut dotslash = Command::new("dotslash");
+    maybe_apply_github_token(&mut dotslash);
+    let status = dotslash
         .arg("--")
         .arg("fetch")
         .arg(bash.clone())
@@ -66,6 +68,27 @@ where
     }))?;
 
     Ok(transport)
+}
+
+fn maybe_apply_github_token(cmd: &mut Command) {
+    if std::env::var("GH_TOKEN").is_ok() || std::env::var("GITHUB_TOKEN").is_ok() {
+        return;
+    }
+    if let Some(token) = read_repo_github_token() {
+        cmd.env("GH_TOKEN", token);
+    }
+}
+
+fn read_repo_github_token() -> Option<String> {
+    let repo_root = find_resource!(".").ok()?;
+    let token_path = repo_root.join(".github_token");
+    let token = std::fs::read_to_string(token_path).ok()?;
+    let token = token.trim();
+    if token.is_empty() {
+        None
+    } else {
+        Some(token.to_string())
+    }
 }
 
 pub async fn write_default_execpolicy<P>(policy: &str, codex_home: P) -> anyhow::Result<()>

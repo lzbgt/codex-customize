@@ -24,8 +24,9 @@ This file tracks high-impact work items for this repo. Ordering is by priority (
 
 ## Done
 
+- Exec-server tests now fall back to repo `.github_token` when GH_TOKEN/GITHUB_TOKEN is missing for dotslash fetches.
 - Warn on unknown `[features]` keys at startup (single warning event), and move config warning helpers into `config/warnings.rs`.
-- Raise auto-continue batching targets to 18-24 (min 18) and bump base prompt throughput guidance to 8-12; update docs, CLI help, and prompt templates.
+- Raise auto-continue batching targets to 18-24 (min 18) and bump base prompt throughput guidance to 12-18; update docs, CLI help, and prompt templates.
 - Rebasing onto the latest upstream `origin/main`, then re-applying/augmenting the auto-continue feature + verbose defaults on top of upstream.
 - Fixed TUI reliability after interrupts (`Esc` / "Conversation interrupted"): queued prompts submitted even if entered before SessionConfigured; interrupt clears stuck MCP startup running state.
 - Made `Ctrl+C` behavior predictable when idle (exit) and when running (interrupt), without being blocked by MCP startup “running” state.
