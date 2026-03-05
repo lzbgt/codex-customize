@@ -1536,8 +1536,13 @@ impl Config {
         let ConfigRequirements {
             approval_policy: mut constrained_approval_policy,
             sandbox_policy: mut constrained_sandbox_policy,
-            mcp_servers,
+            mut mcp_servers,
         } = requirements;
+        if is_yolo_profile {
+            constrained_approval_policy = Constrained::allow_any(AskForApproval::Never);
+            constrained_sandbox_policy = Constrained::allow_any(SandboxPolicy::DangerFullAccess);
+            mcp_servers = None;
+        }
 
         constrained_approval_policy
             .set(approval_policy)
@@ -1787,6 +1792,7 @@ mod tests {
     use crate::config::types::HistoryPersistence;
     use crate::config::types::McpServerTransportConfig;
     use crate::config::types::Notifications;
+    use crate::config_loader::ConfigRequirementsToml;
     use crate::config_loader::RequirementSource;
     use crate::features::Feature;
 
@@ -2535,6 +2541,87 @@ profile = "project"
         assert!(config.shell_environment_policy.ignore_default_excludes);
         assert!(config.shell_environment_policy.exclude.is_empty());
         assert!(config.shell_environment_policy.include_only.is_empty());
+
+        Ok(())
+    }
+
+    #[test]
+    fn yolo_profile_bypasses_requirements_constraints() -> std::io::Result<()> {
+        let codex_home = TempDir::new()?;
+        let requirement_source = RequirementSource::Unknown;
+        let approval_policy = Constrained::new(
+            AskForApproval::OnRequest,
+            move |candidate| {
+                if candidate == &AskForApproval::OnRequest {
+                    Ok(())
+                } else {
+                    Err(ConstraintError::InvalidValue {
+                        field_name: "approval_policy",
+                        candidate: format!("{candidate:?}"),
+                        allowed: "OnRequest".to_string(),
+                        requirement_source: requirement_source.clone(),
+                    })
+                }
+            },
+        )
+        .expect("approval policy constraint should be valid");
+        let requirement_source = RequirementSource::Unknown;
+        let sandbox_policy = Constrained::new(SandboxPolicy::ReadOnly, move |candidate| {
+            if matches!(candidate, SandboxPolicy::ReadOnly) {
+                Ok(())
+            } else {
+                Err(ConstraintError::InvalidValue {
+                    field_name: "sandbox_policy",
+                    candidate: format!("{candidate:?}"),
+                    allowed: "ReadOnly".to_string(),
+                    requirement_source: requirement_source.clone(),
+                })
+            }
+        })
+        .expect("sandbox policy constraint should be valid");
+        let requirements = ConfigRequirements {
+            approval_policy,
+            sandbox_policy,
+            mcp_servers: Some(Sourced::new(
+                BTreeMap::from([(
+                    "allowed".to_string(),
+                    McpServerRequirement {
+                        identity: McpServerIdentity::Command {
+                            command: "allowed-cmd".to_string(),
+                        },
+                    },
+                )]),
+                RequirementSource::Unknown,
+            )),
+        };
+        let config_layer_stack =
+            ConfigLayerStack::new(Vec::new(), requirements, ConfigRequirementsToml::default())?;
+
+        let cfg = ConfigToml {
+            profile: Some("yolo".to_string()),
+            mcp_servers: HashMap::from([("blocked".to_string(), stdio_mcp("blocked-cmd"))]),
+            ..Default::default()
+        };
+
+        let config = Config::load_config_with_layer_stack(
+            cfg,
+            ConfigOverrides::default(),
+            codex_home.path().to_path_buf(),
+            config_layer_stack,
+        )?;
+
+        assert_eq!(config.approval_policy.get(), &AskForApproval::Never);
+        assert!(matches!(
+            config.sandbox_policy.get(),
+            &SandboxPolicy::DangerFullAccess
+        ));
+        let server = config
+            .mcp_servers
+            .get()
+            .get("blocked")
+            .expect("expected mcp server");
+        assert!(server.enabled);
+        assert_eq!(server.disabled_reason, None);
 
         Ok(())
     }
