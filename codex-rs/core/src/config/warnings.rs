@@ -190,9 +190,15 @@ fn collect_unknown_feature_keys(value: &TomlValue, keys: &mut BTreeSet<String>) 
 #[cfg(test)]
 mod tests {
     use super::describe_layer_source;
+    use super::unknown_feature_keys;
+    use crate::config_loader::ConfigLayerEntry;
+    use crate::config_loader::ConfigLayerStack;
+    use crate::config_loader::ConfigRequirements;
+    use crate::config_loader::ConfigRequirementsToml;
     use codex_app_server_protocol::ConfigLayerSource;
     use codex_utils_absolute_path::AbsolutePathBuf;
     use std::env;
+    use toml::Value as TomlValue;
 
     #[test]
     fn describe_layer_source_formats_variants() {
@@ -238,5 +244,28 @@ mod tests {
             describe_layer_source(&ConfigLayerSource::LegacyManagedConfigTomlFromMdm),
             "legacy-managed-mdm"
         );
+    }
+
+    #[test]
+    fn unknown_feature_keys_includes_profile_flags() {
+        let temp_dir = env::temp_dir();
+        let user_file = AbsolutePathBuf::try_from(temp_dir.join("config.toml")).unwrap();
+        let config: TomlValue = toml::from_str(
+            r#"
+[profiles.demo.features]
+mystery_flag = true
+"#,
+        )
+        .expect("parse config");
+        let layer = ConfigLayerEntry::new(ConfigLayerSource::User { file: user_file }, config);
+        let stack = ConfigLayerStack::new(
+            vec![layer],
+            ConfigRequirements::default(),
+            ConfigRequirementsToml::default(),
+        )
+        .expect("stack");
+
+        let keys = unknown_feature_keys(&stack);
+        assert_eq!(keys, vec!["mystery_flag".to_string()]);
     }
 }
