@@ -13,6 +13,7 @@ use crate::config::types::OtelConfigToml;
 use crate::config::types::OtelExporterKind;
 use crate::config::types::SandboxWorkspaceWrite;
 use crate::config::types::ShellEnvironmentPolicy;
+use crate::config::types::ShellEnvironmentPolicyInherit;
 use crate::config::types::ShellEnvironmentPolicyToml;
 use crate::config::types::SkillsConfig;
 use crate::config::types::Tui;
@@ -1263,8 +1264,8 @@ impl Config {
             model,
             review_model: override_review_model,
             cwd,
-            approval_policy: approval_policy_override,
-            sandbox_mode,
+            mut approval_policy: approval_policy_override,
+            mut sandbox_mode,
             model_provider,
             config_profile: config_profile_key,
             codex_linux_sandbox_exe,
@@ -1274,38 +1275,61 @@ impl Config {
             compact_prompt,
             include_apply_patch_tool: include_apply_patch_tool_override,
             show_raw_agent_reasoning,
-            tools_view_image: override_tools_view_image,
+            mut tools_view_image: override_tools_view_image,
             additional_writable_roots,
-            disable_exec_policy,
+            mut disable_exec_policy,
         } = overrides;
 
         let active_profile_name = config_profile_key
             .as_ref()
             .or(cfg.profile.as_ref())
             .cloned();
+        let is_yolo_profile = active_profile_name
+            .as_deref()
+            .is_some_and(|name| name.eq_ignore_ascii_case("yolo"));
         let config_profile = match active_profile_name.as_ref() {
             Some(key) => cfg
                 .profiles
                 .get(key)
+                .cloned()
+                .or_else(|| is_yolo_profile.then(ConfigProfile::default))
                 .ok_or_else(|| {
                     std::io::Error::new(
                         std::io::ErrorKind::NotFound,
                         format!("config profile `{key}` not found"),
                     )
-                })?
-                .clone(),
+                })?,
             None => ConfigProfile::default(),
         };
+
+        if is_yolo_profile {
+            approval_policy_override = Some(AskForApproval::Never);
+            sandbox_mode = Some(SandboxMode::DangerFullAccess);
+            override_tools_view_image = Some(true);
+            disable_exec_policy = true;
+        }
 
         let feature_overrides = FeatureOverrides {
             include_apply_patch_tool: include_apply_patch_tool_override,
         };
 
         let mut features = Features::from_config(&cfg, &config_profile, feature_overrides);
+        if is_yolo_profile {
+            features
+                .enable(Feature::ShellTool)
+                .enable(Feature::UnifiedExec)
+                .enable(Feature::ApplyPatchFreeform)
+                .enable(Feature::WebSearchRequest)
+                .disable(Feature::WebSearchCached)
+                .disable(Feature::ExecPolicy);
+        }
         if disable_exec_policy {
             features.disable(Feature::ExecPolicy);
         }
-        let web_search_mode = resolve_web_search_mode(&cfg, &config_profile, &features);
+        let mut web_search_mode = resolve_web_search_mode(&cfg, &config_profile, &features);
+        if is_yolo_profile {
+            web_search_mode = Some(WebSearchMode::Live);
+        }
         #[cfg(target_os = "windows")]
         {
             // Base flag controls sandbox on/off; elevated only applies when base is enabled.
@@ -1401,7 +1425,13 @@ impl Config {
             })?
             .clone();
 
-        let shell_environment_policy = cfg.shell_environment_policy.into();
+        let mut shell_environment_policy = cfg.shell_environment_policy.into();
+        if is_yolo_profile {
+            shell_environment_policy.inherit = ShellEnvironmentPolicyInherit::All;
+            shell_environment_policy.ignore_default_excludes = true;
+            shell_environment_policy.exclude.clear();
+            shell_environment_policy.include_only.clear();
+        }
 
         let history = cfg.history.unwrap_or_default();
 
@@ -2443,6 +2473,68 @@ profile = "project"
             &SandboxPolicy::DangerFullAccess
         ));
         assert!(config.did_user_set_custom_approval_policy_or_sandbox_mode);
+
+        Ok(())
+    }
+
+    #[test]
+    fn yolo_profile_forces_full_power_overrides() -> std::io::Result<()> {
+        let codex_home = TempDir::new()?;
+        let mut feature_entries = BTreeMap::new();
+        feature_entries.insert("shell_tool".to_string(), false);
+        feature_entries.insert("unified_exec".to_string(), false);
+        feature_entries.insert("apply_patch_freeform".to_string(), false);
+        feature_entries.insert("web_search_request".to_string(), false);
+        feature_entries.insert("web_search_cached".to_string(), true);
+        feature_entries.insert("exec_policy".to_string(), true);
+
+        let cfg = ConfigToml {
+            profile: Some("yolo".to_string()),
+            features: Some(FeaturesToml {
+                entries: feature_entries,
+            }),
+            web_search: Some(WebSearchMode::Cached),
+            tools: Some(ToolsToml {
+                view_image: Some(false),
+                ..Default::default()
+            }),
+            shell_environment_policy: ShellEnvironmentPolicyToml {
+                inherit: Some(ShellEnvironmentPolicyInherit::None),
+                ignore_default_excludes: Some(false),
+                exclude: Some(vec!["SECRET".to_string()]),
+                include_only: Some(vec!["PATH".to_string()]),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let config = Config::load_from_base_config_with_overrides(
+            cfg,
+            ConfigOverrides::default(),
+            codex_home.path().to_path_buf(),
+        )?;
+
+        assert_eq!(config.active_profile.as_deref(), Some("yolo"));
+        assert_eq!(config.approval_policy.get(), &AskForApproval::Never);
+        assert!(matches!(
+            config.sandbox_policy.get(),
+            &SandboxPolicy::DangerFullAccess
+        ));
+        assert!(config.features.enabled(Feature::ShellTool));
+        assert!(config.features.enabled(Feature::UnifiedExec));
+        assert!(config.features.enabled(Feature::ApplyPatchFreeform));
+        assert!(config.features.enabled(Feature::WebSearchRequest));
+        assert!(!config.features.enabled(Feature::WebSearchCached));
+        assert!(!config.features.enabled(Feature::ExecPolicy));
+        assert_eq!(config.web_search_mode, Some(WebSearchMode::Live));
+        assert!(config.view_image_enabled);
+        assert_eq!(
+            config.shell_environment_policy.inherit,
+            ShellEnvironmentPolicyInherit::All
+        );
+        assert!(config.shell_environment_policy.ignore_default_excludes);
+        assert!(config.shell_environment_policy.exclude.is_empty());
+        assert!(config.shell_environment_policy.include_only.is_empty());
 
         Ok(())
     }

@@ -99,6 +99,10 @@ codex --yolo
 
 When enabled, Codex skips approval prompts, runs without sandboxing, bypasses managed policy constraints, disables exec-policy enforcement, and force-enables unrestricted tool use (shell, unified_exec, apply_patch, view_image, and live web_search) with full host/network access. YOLO removes Codex-side restrictions entirely; risk is accepted by the user and should be mitigated by the host security model. YOLO overrides replace conflicting config/CLI overrides to guarantee full-power behavior, including forcing `features.exec_policy=false` and resetting the shell environment policy to inherit all variables with no default excludes. The TUI additionally enables `--auto-continue` (you can cap it with `--auto-continue-max-turns N`).
 
+To persist YOLO without a CLI flag, set `profile = "yolo"` in `config.toml`. This applies the same
+full-power overrides as `--yolo` even if you do not define `[profiles.yolo]` (additional settings
+in `[profiles.yolo]` are still honored, but the unrestricted defaults are enforced).
+
 ### Auto-continue (TUI)
 
 When `--auto-continue` is enabled, the TUI submits a curated "Continue" follow-up prompt after each turn unless the agent requests stop. That follow-up also counts as approval for any previously requested required step (such as a full test suite) unless the user explicitly declined. The follow-up prompt instructs the agent to batch 36-48 related tasks per turn (minimum 36) and avoid micro-fixes. Use `--auto-continue-max-turns N` to cap how many turns will run.
