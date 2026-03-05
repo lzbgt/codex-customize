@@ -1016,11 +1016,6 @@ impl ProjectConfig {
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, JsonSchema)]
 #[schemars(deny_unknown_fields)]
 pub struct ToolsToml {
-    /// Deprecated: use top-level `web_search = "live|cached|disabled"` or
-    /// `[features].web_search_request = true`.
-    #[serde(default, alias = "web_search_request")]
-    pub web_search: Option<bool>,
-
     /// Enable the `view_image` tool that lets the agent attach local images.
     #[serde(default)]
     pub view_image: Option<bool>,
@@ -1038,7 +1033,7 @@ pub struct AgentsToml {
 impl From<ToolsToml> for Tools {
     fn from(tools_toml: ToolsToml) -> Self {
         Self {
-            web_search: tools_toml.web_search,
+            web_search: None,
             view_image: tools_toml.view_image,
         }
     }
@@ -2354,17 +2349,26 @@ trust_level = "trusted"
     }
 
     #[test]
-    fn profile_legacy_toggles_override_base() -> std::io::Result<()> {
+    fn profile_features_override_base() -> std::io::Result<()> {
         let codex_home = TempDir::new()?;
+        let mut base_features = BTreeMap::new();
+        base_features.insert("web_search_request".to_string(), true);
+        let mut profile_features = BTreeMap::new();
+        profile_features.insert("web_search_request".to_string(), false);
         let mut profiles = HashMap::new();
         profiles.insert(
             "work".to_string(),
             ConfigProfile {
-                tools_web_search: Some(false),
+                features: Some(FeaturesToml {
+                    entries: profile_features,
+                }),
                 ..Default::default()
             },
         );
         let cfg = ConfigToml {
+            features: Some(FeaturesToml {
+                entries: base_features,
+            }),
             profiles,
             profile: Some("work".to_string()),
             ..Default::default()

@@ -21,6 +21,7 @@ use codex_app_server_protocol::WriteStatus;
 use codex_core::config::set_project_trust_level;
 use codex_core::config_loader::SYSTEM_CONFIG_TOML_FILE_UNIX;
 use codex_protocol::config_types::TrustLevel;
+use codex_protocol::config_types::WebSearchMode;
 use codex_protocol::openai_models::ReasoningEffort;
 use codex_utils_absolute_path::AbsolutePathBuf;
 use pretty_assertions::assert_eq;
@@ -90,9 +91,9 @@ async fn config_read_includes_tools() -> Result<()> {
         &codex_home,
         r#"
 model = "gpt-user"
+web_search = "live"
 
 [tools]
-web_search = true
 view_image = false
 "#,
     )?;
@@ -123,12 +124,13 @@ view_image = false
     assert_eq!(
         tools,
         ToolsV2 {
-            web_search: Some(true),
+            web_search: None,
             view_image: Some(false),
         }
     );
+    assert_eq!(config.web_search, Some(WebSearchMode::Live));
     assert_eq!(
-        origins.get("tools.web_search").expect("origin").name,
+        origins.get("web_search").expect("origin").name,
         ConfigLayerSource::User {
             file: user_file.clone(),
         }

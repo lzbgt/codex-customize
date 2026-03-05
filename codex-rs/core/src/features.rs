@@ -309,7 +309,6 @@ impl Features {
         let base_legacy = LegacyFeatureToggles {
             experimental_use_freeform_apply_patch: cfg.experimental_use_freeform_apply_patch,
             experimental_use_unified_exec_tool: cfg.experimental_use_unified_exec_tool,
-            tools_web_search: cfg.tools.as_ref().and_then(|t| t.web_search),
             ..Default::default()
         };
         base_legacy.apply(&mut features);
@@ -324,7 +323,6 @@ impl Features {
                 .experimental_use_freeform_apply_patch,
 
             experimental_use_unified_exec_tool: config_profile.experimental_use_unified_exec_tool,
-            tools_web_search: config_profile.tools_web_search,
         };
         profile_legacy.apply(&mut features);
         if let Some(profile_features) = config_profile.features.as_ref() {

@@ -258,9 +258,6 @@
         "tools_view_image": {
           "type": "boolean"
         },
-        "tools_web_search": {
-          "type": "boolean"
-        },
         "web_search": {
           "$ref": "#/definitions/WebSearchMode"
         }
@@ -932,11 +929,6 @@
         "view_image": {
           "default": null,
           "description": "Enable the `view_image` tool that lets the agent attach local images.",
-          "type": "boolean"
-        },
-        "web_search": {
-          "default": null,
-          "description": "Deprecated: use top-level `web_search = \"live|cached|disabled\"` or `[features].web_search_request = true`.",
           "type": "boolean"
         }
       },

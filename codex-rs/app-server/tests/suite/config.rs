@@ -98,7 +98,7 @@ async fn get_config_toml_parses_all_fields() -> Result<()> {
             model_reasoning_summary: Some(ReasoningSummary::Detailed),
             model_verbosity: Some(Verbosity::Medium),
             tools: Some(Tools {
-                web_search: Some(false),
+                web_search: None,
                 view_image: Some(true),
             }),
             profile: Some("test".to_string()),

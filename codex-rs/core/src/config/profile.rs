@@ -36,7 +36,6 @@ pub struct ConfigProfile {
     pub include_apply_patch_tool: Option<bool>,
     pub experimental_use_unified_exec_tool: Option<bool>,
     pub experimental_use_freeform_apply_patch: Option<bool>,
-    pub tools_web_search: Option<bool>,
     pub tools_view_image: Option<bool>,
     pub web_search: Option<WebSearchMode>,
     pub analytics: Option<crate::config::types::AnalyticsConfigToml>,
