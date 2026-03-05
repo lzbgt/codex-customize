@@ -101,7 +101,8 @@ When enabled, Codex skips approval prompts, runs without sandboxing, bypasses ma
 
 To persist YOLO without a CLI flag, set `profile = "yolo"` in `config.toml`. This applies the same
 full-power overrides as `--yolo` even if you do not define `[profiles.yolo]` (additional settings
-in `[profiles.yolo]` are still honored, but the unrestricted defaults are enforced).
+in `[profiles.yolo]` are still honored, but the unrestricted defaults are enforced). This mode
+also bypasses managed requirements/allowlists (approval policy, sandbox modes, MCP server lists).
 
 ### Auto-continue (TUI)
 

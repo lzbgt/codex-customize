@@ -2495,7 +2495,7 @@ profile = "project"
         feature_entries.insert("exec_policy".to_string(), true);
 
         let cfg = ConfigToml {
-            profile: Some("yolo".to_string()),
+            profile: Some("YoLo".to_string()),
             features: Some(FeaturesToml {
                 entries: feature_entries,
             }),
@@ -2520,7 +2520,7 @@ profile = "project"
             codex_home.path().to_path_buf(),
         )?;
 
-        assert_eq!(config.active_profile.as_deref(), Some("yolo"));
+        assert_eq!(config.active_profile.as_deref(), Some("YoLo"));
         assert_eq!(config.approval_policy.get(), &AskForApproval::Never);
         assert!(matches!(
             config.sandbox_policy.get(),

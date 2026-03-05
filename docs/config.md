@@ -49,7 +49,8 @@ and a fully inherited shell environment with default excludes disabled). Codex a
 restrictions in YOLO; the user accepts the risk and relies on the host security model.
 Setting `profile = "yolo"` in `config.toml` applies the same full-power overrides as `--yolo`,
 even if you do not define `[profiles.yolo]`. If you do define `[profiles.yolo]`, any additional
-settings are honored, but YOLO still forces the unrestricted defaults.
+settings are honored, but YOLO still forces the unrestricted defaults. This also bypasses managed
+requirements/allowlists that would otherwise constrain approval policy, sandboxing, or MCP servers.
 
 When the TUI runs with `--auto-continue`, the follow-up "Continue" prompt also grants approval
 for any previously requested required step unless the user explicitly declined. The follow-up
