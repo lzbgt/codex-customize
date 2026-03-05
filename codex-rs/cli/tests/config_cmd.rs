@@ -196,3 +196,60 @@ fn layers_json_reports_deprecated_keys() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn warnings_json_reports_no_warnings() -> Result<()> {
+    let codex_home = TempDir::new()?;
+
+    let mut cmd = codex_command(codex_home.path())?;
+    let output = cmd.args(["config", "warnings", "--json"]).output()?;
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8(output.stdout)?;
+    let parsed: JsonValue = serde_json::from_str(&stdout)?;
+    assert_eq!(
+        parsed.get("has_warnings").and_then(JsonValue::as_bool),
+        Some(false)
+    );
+
+    let counts = parsed
+        .get("counts")
+        .and_then(JsonValue::as_object)
+        .expect("counts");
+    assert_eq!(
+        counts
+            .get("experimental_instructions_file")
+            .and_then(JsonValue::as_u64),
+        Some(0)
+    );
+    assert_eq!(
+        counts.get("tools.web_search").and_then(JsonValue::as_u64),
+        Some(0)
+    );
+    assert_eq!(
+        counts
+            .get("features.web_search")
+            .and_then(JsonValue::as_u64),
+        Some(0)
+    );
+    assert_eq!(
+        counts.get("unknown_features").and_then(JsonValue::as_u64),
+        Some(0)
+    );
+
+    Ok(())
+}
+
+#[test]
+fn warnings_text_reports_no_warnings() -> Result<()> {
+    let codex_home = TempDir::new()?;
+
+    let mut cmd = codex_command(codex_home.path())?;
+    let output = cmd.args(["config", "warnings"]).output()?;
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8(output.stdout)?;
+    assert!(stdout.contains("No configuration warnings found."));
+
+    Ok(())
+}
