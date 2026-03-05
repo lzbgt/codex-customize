@@ -229,7 +229,8 @@ fn print_layers_json(config: &Config) {
 
     let layers_json = layers
         .iter()
-        .map(|layer| {
+        .enumerate()
+        .map(|(index, layer)| {
             let mut deprecated = Vec::new();
             if instructions_sources.contains(&layer.name) {
                 deprecated.push("experimental_instructions_file");
@@ -241,6 +242,7 @@ fn print_layers_json(config: &Config) {
                 deprecated.push("features.web_search");
             }
             serde_json::json!({
+                "precedence": index,
                 "source": describe_layer_source(&layer.name),
                 "version": layer.version,
                 "enabled": !layer.is_disabled(),

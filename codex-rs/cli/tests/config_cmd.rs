@@ -181,6 +181,7 @@ fn layers_json_reports_deprecated_keys() -> Result<()> {
         .iter()
         .find(|entry| entry.get("source").and_then(JsonValue::as_str) == Some(&expected_source))
         .expect("user layer");
+    assert_eq!(layer.get("precedence").and_then(JsonValue::as_u64), Some(0));
     assert_eq!(
         layer.get("enabled").and_then(JsonValue::as_bool),
         Some(true)

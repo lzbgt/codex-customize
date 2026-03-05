@@ -49,7 +49,7 @@ Use the CLI to inspect which configuration layers are active and to surface depr
 - `codex config warnings` summarizes deprecated keys and unknown `[features]` entries.
 - Use `--json` with either subcommand to emit machine-readable output.
   The JSON payload for `layers` includes `source`, `version`, `enabled`, `disabled_reason`,
-  and `deprecated_keys` for each layer.
+  `precedence` (0 = highest), and `deprecated_keys` for each layer.
   The JSON payload for `warnings` includes `has_warnings` and per-key `counts`.
 
 Pass `--profile` to target a specific profile or `--cwd` to resolve project layers for a
