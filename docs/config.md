@@ -55,7 +55,7 @@ sandboxing, or MCP servers.
 
 When the TUI runs with `--auto-continue`, the follow-up "Continue" prompt also grants approval
 for any previously requested required step unless the user explicitly declined. The follow-up
-prompt targets 36-48 related tasks per turn (minimum 36). Use `--auto-continue-max-turns N` to cap
+prompt targets 48-72 related tasks per turn (minimum 48). Use `--auto-continue-max-turns N` to cap
 the number of turns.
 
 ## Notices

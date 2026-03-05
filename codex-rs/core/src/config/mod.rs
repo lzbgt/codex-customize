@@ -413,9 +413,13 @@ impl ConfigBuilder {
             None => AbsolutePathBuf::current_dir()?,
         };
         harness_overrides.cwd = Some(cwd.to_path_buf());
-        let mut config_layer_stack =
-            load_config_layers_state(&codex_home, Some(cwd), &cli_overrides, loader_overrides.clone())
-                .await?;
+        let mut config_layer_stack = load_config_layers_state(
+            &codex_home,
+            Some(cwd.clone()),
+            &cli_overrides,
+            loader_overrides.clone(),
+        )
+        .await?;
         let yolo_requested = config_layer_stack_requests_yolo(&config_layer_stack)
             || harness_overrides
                 .config_profile
@@ -428,7 +432,7 @@ impl ConfigBuilder {
             loader_overrides.skip_managed_config_layers = true;
             config_layer_stack = load_config_layers_state(
                 &codex_home,
-                Some(cwd),
+                Some(cwd.clone()),
                 &cli_overrides,
                 loader_overrides,
             )
@@ -1310,7 +1314,7 @@ impl Config {
             model,
             review_model: override_review_model,
             cwd,
-            mut approval_policy: approval_policy_override,
+            approval_policy: mut approval_policy_override,
             mut sandbox_mode,
             model_provider,
             config_profile: config_profile_key,
@@ -1321,7 +1325,7 @@ impl Config {
             compact_prompt,
             include_apply_patch_tool: include_apply_patch_tool_override,
             show_raw_agent_reasoning,
-            mut tools_view_image: override_tools_view_image,
+            tools_view_image: mut override_tools_view_image,
             additional_writable_roots,
             mut disable_exec_policy,
         } = overrides;
@@ -1471,7 +1475,8 @@ impl Config {
             })?
             .clone();
 
-        let mut shell_environment_policy = cfg.shell_environment_policy.into();
+        let mut shell_environment_policy: ShellEnvironmentPolicy =
+            cfg.shell_environment_policy.into();
         if is_yolo_profile {
             shell_environment_policy.inherit = ShellEnvironmentPolicyInherit::All;
             shell_environment_policy.ignore_default_excludes = true;
@@ -2609,21 +2614,18 @@ profile = "project"
     fn yolo_profile_bypasses_requirements_constraints() -> std::io::Result<()> {
         let codex_home = TempDir::new()?;
         let requirement_source = RequirementSource::Unknown;
-        let approval_policy = Constrained::new(
-            AskForApproval::OnRequest,
-            move |candidate| {
-                if candidate == &AskForApproval::OnRequest {
-                    Ok(())
-                } else {
-                    Err(ConstraintError::InvalidValue {
-                        field_name: "approval_policy",
-                        candidate: format!("{candidate:?}"),
-                        allowed: "OnRequest".to_string(),
-                        requirement_source: requirement_source.clone(),
-                    })
-                }
-            },
-        )
+        let approval_policy = Constrained::new(AskForApproval::OnRequest, move |candidate| {
+            if candidate == &AskForApproval::OnRequest {
+                Ok(())
+            } else {
+                Err(ConstraintError::InvalidValue {
+                    field_name: "approval_policy",
+                    candidate: format!("{candidate:?}"),
+                    allowed: "OnRequest".to_string(),
+                    requirement_source: requirement_source.clone(),
+                })
+            }
+        })
         .expect("approval policy constraint should be valid");
         let requirement_source = RequirementSource::Unknown;
         let sandbox_policy = Constrained::new(SandboxPolicy::ReadOnly, move |candidate| {
@@ -2699,6 +2701,29 @@ profile = "project"
             codex_home.path(),
             &cwd,
             Vec::new(),
+            LoaderOverrides {
+                managed_config_path: Some(managed_path),
+                ..Default::default()
+            },
+        )
+        .await?;
+
+        assert_eq!(cfg.review_model, None);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn yolo_profile_cli_override_skips_managed_config_in_toml_load() -> anyhow::Result<()> {
+        let codex_home = TempDir::new()?;
+        let managed_path = codex_home.path().join("managed_config.toml");
+        std::fs::write(&managed_path, "review_model = \"managed\"\n")?;
+        let cwd = AbsolutePathBuf::try_from(codex_home.path())?;
+
+        let cfg = load_config_as_toml_with_cli_overrides_and_loader_overrides(
+            codex_home.path(),
+            &cwd,
+            vec![("profile".to_string(), TomlValue::String("yolo".to_string()))],
             LoaderOverrides {
                 managed_config_path: Some(managed_path),
                 ..Default::default()

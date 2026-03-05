@@ -29,6 +29,9 @@ Precedence is **top overrides bottom**:
 3. **Session flags** (CLI overrides, applied as dotted-path TOML writes)
 4. **User** config (`config.toml`)
 
+Note: when the effective profile is `yolo`, Codex skips managed config layers
+and requirements enforcement, so these layers are bypassed even if present.
+
 Layers with a `disabled_reason` are still surfaced for UI, but are ignored when
 computing the effective config and origins metadata. This is what
 `ConfigLayerStack::effective_config()` implements.

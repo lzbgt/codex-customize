@@ -21,6 +21,7 @@ This file tracks high-impact work items for this repo. Ordering is by priority (
 ## P2
 
 - Decide whether `rg` should be bundled for Windows/Linux distributions (currently only `apply_patch` is bundled in the x64 zips).
+- Trace any lingering `tools.web_search` legacy warnings to their config source (managed prefs or managed_config) and document the cleanup path.
 
 ## Done
 
@@ -28,7 +29,7 @@ This file tracks high-impact work items for this repo. Ordering is by priority (
 - Contributing docs now mention GH_TOKEN/.github_token for DotSlash test downloads.
 - Exec-server tests now fall back to repo `.github_token` when GH_TOKEN/GITHUB_TOKEN is missing for dotslash fetches.
 - Warn on unknown `[features]` keys at startup (single warning event), and move config warning helpers into `config/warnings.rs`.
-- Raise auto-continue batching targets to 36-48 (min 36) and bump base prompt throughput guidance to 36-48; update docs, CLI help, and prompt templates.
+- Raise auto-continue batching targets to 48-72 (min 48) and bump base prompt throughput guidance to 48-72; update docs, CLI help, and prompt templates.
 - Rebasing onto the latest upstream `origin/main`, then re-applying/augmenting the auto-continue feature + verbose defaults on top of upstream.
 - Fixed TUI reliability after interrupts (`Esc` / "Conversation interrupted"): queued prompts submitted even if entered before SessionConfigured; interrupt clears stuck MCP startup running state.
 - Made `Ctrl+C` behavior predictable when idle (exit) and when running (interrupt), without being blocked by MCP startup “running” state.
@@ -47,10 +48,10 @@ This file tracks high-impact work items for this repo. Ordering is by priority (
 - Release broker lock while polling the event source (avoid pause/resume lock contention).
 - Built, codesigned, and installed macOS `codex` + `apply_patch` (Homebrew prefix), and produced versioned Linux x64 + Windows x64 zip artifacts in `dist/`.
 - YOLO now hard-enables shell/unified_exec/apply_patch/view_image/web_search with explicit full-access help text and disabled exec-policy enforcement.
-- Auto-continue prompts now enforce 36+ tasks per turn and explicit scope expansion into tests/docs when needed.
+- Auto-continue prompts now enforce 48+ tasks per turn and explicit scope expansion into tests/docs when needed.
 - Centralized YOLO override handling and ensured it replaces conflicting config/CLI overrides for full-power behavior.
 - TUI `--search` override now replaces conflicting `web_search` config entries, and CLI override precedence documented.
-- Auto-continue guidance now warns against approval-loop stalls and aligns batch targets to 36-48 tasks.
+- Auto-continue guidance now warns against approval-loop stalls and aligns batch targets to 48-72 tasks.
 - Auto-continue follow-up prompt now treats "Continue" as approval for pending required steps.
 - Auto-continue approval semantics documented in README.
 - TUI auto-continue flag help and docs mention approval semantics and max-turns cap.
@@ -61,8 +62,8 @@ This file tracks high-impact work items for this repo. Ordering is by priority (
 - YOLO CLI help text now mentions full env inheritance behavior.
 - YOLO profile now enforces the same full-power overrides as `--yolo`.
 - YOLO profile bypasses requirements/allowlists and managed config layers for approvals, sandboxing, and MCP servers.
-- Auto-continue guidance now targets 36+ tasks per turn and at least four substantial deliverables.
-- Auto-continue CLI/config docs now mention the 36-48 task batching target.
+- Auto-continue guidance now targets 48+ tasks per turn and at least four substantial deliverables.
+- Auto-continue CLI/config docs now mention the 48-72 task batching target.
 - YOLO docs now state that Codex applies no internal restrictions and relies on host security.
 - YOLO overrides now force `features.exec_policy=false` to remove exec-policy gating.
 - Deprecated `tools.web_search` is now ignored with a deprecation notice instead of breaking config load.
