@@ -459,3 +459,30 @@ fn layers_json_compact_parses() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn layers_text_reports_context_and_deprecations() -> Result<()> {
+    let codex_home = TempDir::new()?;
+    write_deprecated_config(codex_home.path())?;
+
+    let mut cmd = codex_command(codex_home.path())?;
+    let cwd = codex_home.path().join("cwd");
+    std::fs::create_dir_all(&cwd)?;
+    let output = cmd
+        .args(["config", "layers", "--cwd", cwd.to_string_lossy().as_ref()])
+        .output()?;
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8(output.stdout)?;
+    let expected_path = codex_home.path().join("config.toml");
+    let expected_source = format!("user:{}", expected_path.display());
+    assert!(stdout.contains("Config layers (high → low precedence):"));
+    assert!(stdout.contains("Profile: (default)"));
+    assert!(stdout.contains(&format!("CWD: {}", cwd.display())));
+    assert!(stdout.contains(&expected_source));
+    assert!(stdout.contains(
+        "deprecated=experimental_instructions_file, tools.web_search, features.web_search"
+    ));
+
+    Ok(())
+}
