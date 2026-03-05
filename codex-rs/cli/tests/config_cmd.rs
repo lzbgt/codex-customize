@@ -254,3 +254,31 @@ fn warnings_text_reports_no_warnings() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn layers_json_reports_session_flags_precedence() -> Result<()> {
+    let codex_home = TempDir::new()?;
+
+    let mut cmd = codex_command(codex_home.path())?;
+    let output = cmd
+        .args(["-c", "model=\"gpt-5\"", "config", "layers", "--json"])
+        .output()?;
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8(output.stdout)?;
+    let parsed: JsonValue = serde_json::from_str(&stdout)?;
+    let layers = parsed
+        .get("layers")
+        .and_then(JsonValue::as_array)
+        .expect("layers array");
+    let session_layer = layers
+        .iter()
+        .find(|entry| entry.get("source").and_then(JsonValue::as_str) == Some("session-flags"))
+        .expect("session flags layer");
+    assert_eq!(
+        session_layer.get("precedence").and_then(JsonValue::as_u64),
+        Some(0)
+    );
+
+    Ok(())
+}
