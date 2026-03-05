@@ -19,11 +19,11 @@ pub struct ConfigCli {
     pub config_overrides: CliConfigOverrides,
 
     /// Configuration profile from config.toml to use for diagnostics.
-    #[arg(long = "profile", short = 'p')]
+    #[arg(long = "profile", short = 'p', global = true)]
     pub config_profile: Option<String>,
 
     /// Working directory to use when resolving project config layers.
-    #[arg(long = "cwd", value_name = "DIR")]
+    #[arg(long = "cwd", value_name = "DIR", global = true)]
     pub cwd: Option<PathBuf>,
 
     #[command(subcommand)]
