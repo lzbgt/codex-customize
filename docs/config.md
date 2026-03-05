@@ -41,9 +41,9 @@ Some legacy config keys are deprecated or removed:
 
 Codex applies `--config key=value` overrides after loading `~/.codex/config.toml`, so the CLI wins
 over config defaults. In YOLO mode (`--yolo`), Codex replaces any conflicting overrides to force
-full-power behavior (live web search, unrestricted tool enablement, and a fully inherited shell
-environment with default excludes disabled). Codex applies no internal restrictions in YOLO; the
-user accepts the risk and relies on the host security model.
+full-power behavior (live web search, unrestricted tool enablement, `features.exec_policy=false`,
+and a fully inherited shell environment with default excludes disabled). Codex applies no internal
+restrictions in YOLO; the user accepts the risk and relies on the host security model.
 
 When the TUI runs with `--auto-continue`, the follow-up "Continue" prompt also grants approval
 for any previously requested required step unless the user explicitly declined. The follow-up
