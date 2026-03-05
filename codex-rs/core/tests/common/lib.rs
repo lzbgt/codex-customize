@@ -11,12 +11,15 @@ use codex_core::config::ConfigOverrides;
 use codex_utils_absolute_path::AbsolutePathBuf;
 use regex_lite::Regex;
 use std::path::PathBuf;
+use std::sync::OnceLock;
 
 pub mod process;
 pub mod responses;
 pub mod streaming_sse;
 pub mod test_codex;
 pub mod test_codex_exec;
+
+static CODEX_BIN_PATH: OnceLock<PathBuf> = OnceLock::new();
 
 #[track_caller]
 pub fn assert_regex_match<'s>(pattern: &str, actual: &'s str) -> regex_lite::Captures<'s> {
@@ -69,6 +72,38 @@ pub fn test_tmp_path() -> AbsolutePathBuf {
 
 pub fn test_tmp_path_buf() -> PathBuf {
     test_tmp_path().into_path_buf()
+}
+
+pub fn codex_bin() -> PathBuf {
+    CODEX_BIN_PATH
+        .get_or_init(|| resolve_codex_bin().expect("should resolve codex binary"))
+        .clone()
+}
+
+fn resolve_codex_bin() -> Result<PathBuf, CargoBinError> {
+    match codex_utils_cargo_bin::cargo_bin("codex") {
+        Ok(path) => Ok(path),
+        Err(CargoBinError::NotFound { .. } | CargoBinError::ResolvedPathDoesNotExist { .. }) => {
+            build_codex_cli_debug();
+            codex_utils_cargo_bin::cargo_bin("codex")
+        }
+        Err(err) => Err(err),
+    }
+}
+
+fn build_codex_cli_debug() {
+    let repo_root = find_resource!(".").expect("resolve repo root for cargo build");
+    let status = std::process::Command::new("cargo")
+        .arg("build")
+        .arg("-p")
+        .arg("codex-cli")
+        .current_dir(repo_root)
+        .status()
+        .expect("spawn cargo build for codex-cli");
+    assert!(
+        status.success(),
+        "cargo build -p codex-cli failed: {status}"
+    );
 }
 
 /// Returns a default `Config` whose on-disk state is confined to the provided

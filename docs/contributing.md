@@ -28,6 +28,7 @@ If you want to contribute a bug fix, please open a bug report first - or verify 
 - Fill in the PR template (or include similar information) - **What? Why? How?**
 - Include a link to a bug report or enhancement request in the issue tracker
 - Run **all** checks locally. Use the root `just` helpers so you stay consistent with the rest of the workspace: `just fmt`, `just fix -p <crate>` for the crate you touched, and the relevant tests (e.g., `cargo test -p codex-tui` or `just test` if you need a full sweep). CI failures that could have been caught locally slow down the process.
+- Exec-server tests fetch a DotSlash-managed bash binary; if GitHub rate limits the download, set `GH_TOKEN`/`GITHUB_TOKEN` or add a repo-local `.github_token` file for the test run.
 - Make sure your branch is up-to-date with `main` and that you have resolved merge conflicts.
 - Mark the PR as **Ready for review** only when you believe it is in a merge-able state.
 

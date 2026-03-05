@@ -24,6 +24,8 @@ This file tracks high-impact work items for this repo. Ordering is by priority (
 
 ## Done
 
+- Core CLI stream tests now auto-build `codex-cli` if the `codex` binary is missing.
+- Contributing docs now mention GH_TOKEN/.github_token for DotSlash test downloads.
 - Exec-server tests now fall back to repo `.github_token` when GH_TOKEN/GITHUB_TOKEN is missing for dotslash fetches.
 - Warn on unknown `[features]` keys at startup (single warning event), and move config warning helpers into `config/warnings.rs`.
 - Raise auto-continue batching targets to 18-24 (min 18) and bump base prompt throughput guidance to 12-18; update docs, CLI help, and prompt templates.
