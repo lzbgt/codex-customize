@@ -40,6 +40,8 @@ fn warnings_surface_deprecated_and_unknown_features() -> Result<()> {
     assert!(output.status.success());
 
     let stdout = String::from_utf8(output.stdout)?;
+    assert!(stdout.contains("Config warnings:"));
+    assert!(stdout.contains("Profile: (default)"));
     assert!(stdout.contains("Deprecated: experimental_instructions_file"));
     assert!(stdout.contains("Deprecated: tools.web_search"));
     assert!(stdout.contains("Deprecated: features.web_search"));
@@ -317,6 +319,8 @@ fn warnings_text_reports_no_warnings() -> Result<()> {
     assert!(output.status.success());
 
     let stdout = String::from_utf8(output.stdout)?;
+    assert!(stdout.contains("Config warnings:"));
+    assert!(stdout.contains("Profile: (default)"));
     assert!(stdout.contains("No configuration warnings found."));
 
     Ok(())

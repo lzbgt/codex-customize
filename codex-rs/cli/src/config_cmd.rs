@@ -161,6 +161,14 @@ fn print_warnings(config: &Config, as_json: bool) {
         return;
     }
 
+    safe_println!("Config warnings:");
+    if let Some(profile) = config.active_profile.as_deref() {
+        safe_println!("Profile: {profile}");
+    } else {
+        safe_println!("Profile: (default)");
+    }
+    safe_println!("CWD: {}", config.cwd.display());
+
     let instructions_sources = deprecated_instructions_file_sources(&config.config_layer_stack);
     let tools_sources = deprecated_tools_web_search_sources(&config.config_layer_stack);
     let features_sources = deprecated_features_web_search_sources(&config.config_layer_stack);

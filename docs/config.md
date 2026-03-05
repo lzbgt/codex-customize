@@ -57,6 +57,50 @@ Use the CLI to inspect which configuration layers are active and to surface depr
 Pass `--profile` to target a specific profile or `--cwd` to resolve project layers for a
 different working directory.
 
+Example: `codex config layers --json`
+
+```json
+{
+  "profile": null,
+  "cwd": "/path/to/project",
+  "layer_count": 1,
+  "layers": [
+    {
+      "precedence": 0,
+      "source": "user:/home/me/.codex/config.toml",
+      "version": "<hash>",
+      "enabled": true,
+      "disabled_reason": null,
+      "deprecated_keys": []
+    }
+  ]
+}
+```
+
+Example: `codex config warnings --json`
+
+```json
+{
+  "profile": null,
+  "cwd": "/path/to/project",
+  "has_warnings": false,
+  "deprecated_count": 0,
+  "warnings_count": 0,
+  "deprecated": {
+    "experimental_instructions_file": [],
+    "tools.web_search": [],
+    "features.web_search": []
+  },
+  "unknown_features": [],
+  "counts": {
+    "experimental_instructions_file": 0,
+    "tools.web_search": 0,
+    "features.web_search": 0,
+    "unknown_features": 0
+  }
+}
+```
+
 ## CLI overrides
 
 Codex applies `--config key=value` overrides after loading `~/.codex/config.toml`, so the CLI wins
