@@ -45,6 +45,9 @@ pub struct ConfigLayersArgs {
     /// Emit the layer summary as JSON.
     #[arg(long = "json")]
     pub json: bool,
+    /// Emit compact JSON (no pretty formatting).
+    #[arg(long = "compact", requires = "json")]
+    pub compact: bool,
 }
 
 #[derive(Debug, Parser)]
@@ -52,6 +55,9 @@ pub struct ConfigWarningsArgs {
     /// Emit warnings as JSON.
     #[arg(long = "json")]
     pub json: bool,
+    /// Emit compact JSON (no pretty formatting).
+    #[arg(long = "compact", requires = "json")]
+    pub compact: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -94,9 +100,11 @@ impl ConfigCli {
                 .context("failed to load configuration")?;
 
         match subcommand {
-            ConfigSubcommand::Layers(args) => print_layers(&config, args.json),
+            ConfigSubcommand::Layers(args) => {
+                print_layers(&config, args.json, args.compact);
+            }
             ConfigSubcommand::Warnings(args) => {
-                print_warnings(&config, args.json);
+                print_warnings(&config, args.json, args.compact);
             }
         }
 
@@ -104,9 +112,9 @@ impl ConfigCli {
     }
 }
 
-fn print_layers(config: &Config, as_json: bool) {
+fn print_layers(config: &Config, as_json: bool, compact_json: bool) {
     if as_json {
-        print_layers_json(config);
+        print_layers_json(config, compact_json);
         return;
     }
 
@@ -155,9 +163,9 @@ fn print_layers(config: &Config, as_json: bool) {
     }
 }
 
-fn print_warnings(config: &Config, as_json: bool) {
+fn print_warnings(config: &Config, as_json: bool, compact_json: bool) {
     if as_json {
-        print_warnings_json(config);
+        print_warnings_json(config, compact_json);
         return;
     }
 
@@ -227,7 +235,7 @@ fn format_sources(sources: &[codex_app_server_protocol::ConfigLayerSource]) -> S
         .join(", ")
 }
 
-fn print_layers_json(config: &Config) {
+fn print_layers_json(config: &Config, compact_json: bool) {
     let layers = config
         .config_layer_stack
         .get_layers(ConfigLayerStackOrdering::HighestPrecedenceFirst, true);
@@ -301,11 +309,10 @@ fn print_layers_json(config: &Config) {
         "layer_count": layers_json.len(),
         "layers": layers_json,
     });
-    let output = serde_json::to_string_pretty(&payload).unwrap_or_else(|_| "{}".to_string());
-    safe_println!("{output}");
+    write_json(payload, compact_json);
 }
 
-fn print_warnings_json(config: &Config) {
+fn print_warnings_json(config: &Config, compact_json: bool) {
     let instructions_sources = deprecated_instructions_file_sources(&config.config_layer_stack);
     let tools_sources = deprecated_tools_web_search_sources(&config.config_layer_stack);
     let features_sources = deprecated_features_web_search_sources(&config.config_layer_stack);
@@ -337,10 +344,18 @@ fn print_warnings_json(config: &Config) {
             "unknown_features": unknown_features.len(),
         }
     });
-    let output = serde_json::to_string_pretty(&payload).unwrap_or_else(|_| "{}".to_string());
-    safe_println!("{output}");
+    write_json(payload, compact_json);
 }
 
 fn format_sources_json(sources: &[codex_app_server_protocol::ConfigLayerSource]) -> Vec<String> {
     sources.iter().map(describe_layer_source).collect()
+}
+
+fn write_json(payload: serde_json::Value, compact_json: bool) {
+    let output = if compact_json {
+        serde_json::to_string(&payload).unwrap_or_else(|_| "{}".to_string())
+    } else {
+        serde_json::to_string_pretty(&payload).unwrap_or_else(|_| "{}".to_string())
+    };
+    safe_println!("{output}");
 }
