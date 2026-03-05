@@ -103,6 +103,51 @@ Example: `codex config warnings --json`
 }
 ```
 
+Schema sketch (JSON output)
+
+```json
+{
+  "layers": {
+    "profile": "string|null",
+    "cwd": "string",
+    "layer_count": "number",
+    "layers": [
+      {
+        "precedence": "number",
+        "source": "string",
+        "source_kind": "mdm|system|user|project|session-flags|legacy-managed-file|legacy-managed-mdm",
+        "source_path": "string|null",
+        "source_domain": "string|null",
+        "source_key": "string|null",
+        "version": "string",
+        "enabled": "boolean",
+        "disabled_reason": "string|null",
+        "deprecated_keys": "string[]"
+      }
+    ]
+  },
+  "warnings": {
+    "profile": "string|null",
+    "cwd": "string",
+    "has_warnings": "boolean",
+    "deprecated_count": "number",
+    "warnings_count": "number",
+    "deprecated": {
+      "experimental_instructions_file": "string[]",
+      "tools.web_search": "string[]",
+      "features.web_search": "string[]"
+    },
+    "unknown_features": "string[]",
+    "counts": {
+      "experimental_instructions_file": "number",
+      "tools.web_search": "number",
+      "features.web_search": "number",
+      "unknown_features": "number"
+    }
+  }
+}
+```
+
 ## CLI overrides
 
 Codex applies `--config key=value` overrides after loading `~/.codex/config.toml`, so the CLI wins
