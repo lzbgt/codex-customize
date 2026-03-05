@@ -97,7 +97,7 @@ Codex also exposes a deliberately unsafe escape hatch for externally sandboxed e
 codex --yolo
 ```
 
-When enabled, Codex skips approval prompts, runs without sandboxing, bypasses managed policy constraints, disables exec-policy enforcement, and force-enables unrestricted tool use (shell, unified_exec, apply_patch, view_image, and live web_search) with full host/network access. YOLO overrides replace conflicting config/CLI overrides to guarantee full-power behavior, including resetting the shell environment policy to inherit all variables with no default excludes. The TUI additionally enables `--auto-continue` (you can cap it with `--auto-continue-max-turns N`).
+When enabled, Codex skips approval prompts, runs without sandboxing, bypasses managed policy constraints, disables exec-policy enforcement, and force-enables unrestricted tool use (shell, unified_exec, apply_patch, view_image, and live web_search) with full host/network access. YOLO removes Codex-side restrictions entirely; risk is accepted by the user and should be mitigated by the host security model. YOLO overrides replace conflicting config/CLI overrides to guarantee full-power behavior, including resetting the shell environment policy to inherit all variables with no default excludes. The TUI additionally enables `--auto-continue` (you can cap it with `--auto-continue-max-turns N`).
 
 ### Auto-continue (TUI)
 

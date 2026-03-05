@@ -51,6 +51,8 @@ pub struct Cli {
     /// force-enable unrestricted tool use (shell/unified_exec/apply_patch/view_image
     /// plus live web_search) with full host/network access. Also resets the shell
     /// environment policy to inherit all variables with default excludes disabled.
+    /// Codex applies no internal restrictions in this mode; the user accepts the
+    /// risk and relies on the host security model.
     /// EXTREMELY DANGEROUS.
     /// Intended solely for running in environments that are externally sandboxed.
     #[arg(
