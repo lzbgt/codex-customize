@@ -417,6 +417,40 @@ model = "gpt-5"
 }
 
 #[test]
+fn warnings_text_reports_profile_context() -> Result<()> {
+    let codex_home = TempDir::new()?;
+    std::fs::create_dir_all(codex_home.path())?;
+    std::fs::write(
+        codex_home.path().join("config.toml"),
+        r#"[profiles.demo]
+model = "gpt-5"
+"#,
+    )?;
+
+    let mut cmd = codex_command(codex_home.path())?;
+    let cwd = codex_home.path().join("cwd");
+    std::fs::create_dir_all(&cwd)?;
+    let output = cmd
+        .args([
+            "config",
+            "warnings",
+            "--profile",
+            "demo",
+            "--cwd",
+            cwd.to_string_lossy().as_ref(),
+        ])
+        .output()?;
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8(output.stdout)?;
+    assert!(stdout.contains("Config warnings:"));
+    assert!(stdout.contains("Profile: demo"));
+    assert!(stdout.contains(&format!("CWD: {}", cwd.display())));
+
+    Ok(())
+}
+
+#[test]
 fn warnings_json_compact_parses() -> Result<()> {
     let codex_home = TempDir::new()?;
 
