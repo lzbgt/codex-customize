@@ -540,6 +540,31 @@ fn layers_json_reports_project_source() -> Result<()> {
 }
 
 #[test]
+fn layers_json_reports_empty_layers() -> Result<()> {
+    let codex_home = TempDir::new()?;
+
+    let mut cmd = codex_command(codex_home.path())?;
+    let output = cmd.args(["config", "layers", "--json"]).output()?;
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8(output.stdout)?;
+    let parsed: JsonValue = serde_json::from_str(&stdout)?;
+    assert_eq!(
+        parsed.get("layer_count").and_then(JsonValue::as_u64),
+        Some(0)
+    );
+    assert_eq!(
+        parsed
+            .get("layers")
+            .and_then(JsonValue::as_array)
+            .map(|layers| layers.len()),
+        Some(0)
+    );
+
+    Ok(())
+}
+
+#[test]
 fn layers_text_reports_context_and_deprecations() -> Result<()> {
     let codex_home = TempDir::new()?;
     write_deprecated_config(codex_home.path())?;
