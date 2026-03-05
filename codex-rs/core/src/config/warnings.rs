@@ -56,7 +56,7 @@ pub fn deprecated_web_search_flags(value: &TomlValue) -> DeprecatedWebSearchFlag
     }
 }
 
-pub(crate) fn unknown_feature_keys(config_layer_stack: &ConfigLayerStack) -> Vec<String> {
+pub fn unknown_feature_keys(config_layer_stack: &ConfigLayerStack) -> Vec<String> {
     let mut keys = BTreeSet::new();
     for layer in config_layer_stack.layers_high_to_low() {
         collect_unknown_feature_keys(&layer.config, &mut keys);
@@ -184,5 +184,59 @@ fn collect_unknown_feature_keys(value: &TomlValue, keys: &mut BTreeSet<String>) 
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::describe_layer_source;
+    use codex_app_server_protocol::ConfigLayerSource;
+    use codex_utils_absolute_path::AbsolutePathBuf;
+    use std::env;
+
+    #[test]
+    fn describe_layer_source_formats_variants() {
+        let temp_dir = env::temp_dir();
+        let system_file = AbsolutePathBuf::try_from(temp_dir.join("system.toml")).unwrap();
+        let user_file = AbsolutePathBuf::try_from(temp_dir.join("user.toml")).unwrap();
+        let project_dir = AbsolutePathBuf::try_from(temp_dir.join("project/.codex")).unwrap();
+        let legacy_file = AbsolutePathBuf::try_from(temp_dir.join("managed_config.toml")).unwrap();
+
+        let mdm = ConfigLayerSource::Mdm {
+            domain: "com.openai.codex".to_string(),
+            key: "config_toml_base64".to_string(),
+        };
+        assert_eq!(
+            describe_layer_source(&mdm),
+            "mdm:com.openai.codex:config_toml_base64"
+        );
+        assert_eq!(
+            describe_layer_source(&ConfigLayerSource::System { file: system_file.clone() }),
+            format!("system:{}", system_file.display())
+        );
+        assert_eq!(
+            describe_layer_source(&ConfigLayerSource::User { file: user_file.clone() }),
+            format!("user:{}", user_file.display())
+        );
+        assert_eq!(
+            describe_layer_source(&ConfigLayerSource::Project {
+                dot_codex_folder: project_dir.clone(),
+            }),
+            format!("project:{}", project_dir.display())
+        );
+        assert_eq!(
+            describe_layer_source(&ConfigLayerSource::SessionFlags),
+            "session-flags"
+        );
+        assert_eq!(
+            describe_layer_source(&ConfigLayerSource::LegacyManagedConfigTomlFromFile {
+                file: legacy_file.clone(),
+            }),
+            format!("legacy-managed:{}", legacy_file.display())
+        );
+        assert_eq!(
+            describe_layer_source(&ConfigLayerSource::LegacyManagedConfigTomlFromMdm),
+            "legacy-managed-mdm"
+        );
     }
 }
