@@ -26,7 +26,9 @@ use core_test_support::skip_if_no_network;
 use core_test_support::stdio_server_bin;
 use core_test_support::test_codex::test_codex;
 use core_test_support::wait_for_event;
+use core_test_support::wait_for_event_with_timeout;
 use mcp_types::ContentBlock;
+use pretty_assertions::assert_eq;
 use serde_json::Value;
 use serde_json::json;
 use serial_test::serial;
@@ -123,9 +125,11 @@ async fn stdio_server_round_trip() -> anyhow::Result<()> {
         })
         .await?;
 
-    let begin_event = wait_for_event(&fixture.codex, |ev| {
-        matches!(ev, EventMsg::McpToolCallBegin(_))
-    })
+    let begin_event = wait_for_event_with_timeout(
+        &fixture.codex,
+        |ev| matches!(ev, EventMsg::McpToolCallBegin(_)),
+        Duration::from_secs(15),
+    )
     .await;
 
     let EventMsg::McpToolCallBegin(begin) = begin_event else {
@@ -134,9 +138,11 @@ async fn stdio_server_round_trip() -> anyhow::Result<()> {
     assert_eq!(begin.invocation.server, server_name);
     assert_eq!(begin.invocation.tool, "echo");
 
-    let end_event = wait_for_event(&fixture.codex, |ev| {
-        matches!(ev, EventMsg::McpToolCallEnd(_))
-    })
+    let end_event = wait_for_event_with_timeout(
+        &fixture.codex,
+        |ev| matches!(ev, EventMsg::McpToolCallEnd(_)),
+        Duration::from_secs(15),
+    )
     .await;
     let EventMsg::McpToolCallEnd(end) = end_event else {
         unreachable!("event guard guarantees McpToolCallEnd");
@@ -170,7 +176,12 @@ async fn stdio_server_round_trip() -> anyhow::Result<()> {
         .expect("env snapshot inserted");
     assert_eq!(env_value, expected_env_value);
 
-    wait_for_event(&fixture.codex, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
+    wait_for_event_with_timeout(
+        &fixture.codex,
+        |ev| matches!(ev, EventMsg::TurnComplete(_)),
+        Duration::from_secs(15),
+    )
+    .await;
 
     server.verify().await;
 
