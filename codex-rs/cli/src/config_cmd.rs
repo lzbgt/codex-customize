@@ -9,7 +9,6 @@ use codex_core::config::deprecated_instructions_file_sources;
 use codex_core::config::deprecated_tools_web_search_sources;
 use codex_core::config::describe_layer_source;
 use codex_core::config::unknown_feature_keys;
-use codex_core::config_loader::ConfigLayerStack;
 use codex_core::config_loader::ConfigLayerStackOrdering;
 use std::path::PathBuf;
 use toml::Value as TomlValue;

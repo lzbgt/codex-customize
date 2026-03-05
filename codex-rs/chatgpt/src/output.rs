@@ -9,6 +9,7 @@ macro_rules! safe_println {
     }};
 }
 
+#[allow(unused_macros)]
 macro_rules! safe_eprintln {
     () => {{
         use std::io::Write;

@@ -1,3 +1,4 @@
+#[allow(unused_macros)]
 macro_rules! safe_println {
     () => {{
         use std::io::Write;
