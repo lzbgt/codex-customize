@@ -91,6 +91,7 @@ fn warnings_json_reports_sources() -> Result<()> {
     assert!(output.status.success());
 
     let stdout = String::from_utf8(output.stdout)?;
+    assert!(!stdout.contains('\n'));
     let parsed: JsonValue = serde_json::from_str(&stdout)?;
     let expected_path = codex_home.path().join("config.toml");
     let expected_source = format!("user:{}", expected_path.display());
