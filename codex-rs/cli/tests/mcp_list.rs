@@ -11,8 +11,10 @@ use serde_json::Value as JsonValue;
 use serde_json::json;
 use tempfile::TempDir;
 
+mod common;
+
 fn codex_command(codex_home: &Path) -> Result<assert_cmd::Command> {
-    let mut cmd = assert_cmd::Command::new(codex_utils_cargo_bin::cargo_bin("codex")?);
+    let mut cmd = assert_cmd::Command::new(common::codex_bin()?);
     cmd.env("CODEX_HOME", codex_home);
     Ok(cmd)
 }

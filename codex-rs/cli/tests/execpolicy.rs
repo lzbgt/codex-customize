@@ -5,6 +5,8 @@ use pretty_assertions::assert_eq;
 use serde_json::json;
 use tempfile::TempDir;
 
+mod common;
+
 #[test]
 fn execpolicy_check_matches_expected_json() -> Result<(), Box<dyn std::error::Error>> {
     let codex_home = TempDir::new()?;
@@ -24,7 +26,7 @@ prefix_rule(
 "#,
     )?;
 
-    let output = Command::new(codex_utils_cargo_bin::cargo_bin("codex")?)
+    let output = Command::new(common::codex_bin()?)
         .env("CODEX_HOME", codex_home.path())
         .args([
             "execpolicy",
@@ -81,7 +83,7 @@ prefix_rule(
 "#,
     )?;
 
-    let output = Command::new(codex_utils_cargo_bin::cargo_bin("codex")?)
+    let output = Command::new(common::codex_bin()?)
         .env("CODEX_HOME", codex_home.path())
         .args([
             "execpolicy",
