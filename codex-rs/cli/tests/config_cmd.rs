@@ -214,6 +214,35 @@ fn layers_json_reports_deprecated_keys() -> Result<()> {
 }
 
 #[test]
+fn layers_json_reports_context() -> Result<()> {
+    let codex_home = TempDir::new()?;
+
+    let mut cmd = codex_command(codex_home.path())?;
+    let cwd = codex_home.path().join("cwd");
+    std::fs::create_dir_all(&cwd)?;
+    let output = cmd
+        .args([
+            "config",
+            "layers",
+            "--json",
+            "--cwd",
+            cwd.to_string_lossy().as_ref(),
+        ])
+        .output()?;
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8(output.stdout)?;
+    let parsed: JsonValue = serde_json::from_str(&stdout)?;
+    assert_eq!(parsed.get("profile").and_then(JsonValue::as_str), None);
+    assert_eq!(
+        parsed.get("cwd").and_then(JsonValue::as_str),
+        Some(cwd.to_string_lossy().as_ref())
+    );
+
+    Ok(())
+}
+
+#[test]
 fn warnings_json_reports_no_warnings() -> Result<()> {
     let codex_home = TempDir::new()?;
 
