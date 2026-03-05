@@ -55,6 +55,7 @@ This file tracks high-impact work items for this repo. Ordering is by priority (
 - YOLO now force-resets shell environment policy overrides to ensure full env inheritance.
 - YOLO CLI help text now mentions full env inheritance behavior.
 - Auto-continue guidance now targets 12+ tasks per turn and at least three substantial deliverables.
+- Auto-continue CLI/config docs now mention the 12-18 task batching target.
 - Removed legacy web_search override usage in exec/tui; clarified deprecation docs and SDK comment.
 - Removed `[tools].web_search` config plumbing; migrated config RPC tests to `web_search` mode.
 - Removed legacy `[features].web_search` alias handling.

@@ -53,6 +53,7 @@ pub fn parse_auto_mode_next(text: &str) -> Option<AutoModeNext> {
 
 #[cfg(test)]
 mod tests {
+    use super::AUTO_CONTINUE_DEVELOPER_INSTRUCTIONS;
     use super::AUTO_CONTINUE_FOLLOWUP_PROMPT;
     use super::AutoModeNext;
     use super::parse_auto_mode_next;
@@ -114,6 +115,22 @@ mod tests {
         assert!(
             AUTO_CONTINUE_FOLLOWUP_PROMPT.contains("three substantial deliverables"),
             "followup prompt should require multiple substantial deliverables"
+        );
+    }
+
+    #[test]
+    fn developer_instructions_set_high_throughput_targets() {
+        assert!(
+            AUTO_CONTINUE_DEVELOPER_INSTRUCTIONS.contains("12-18"),
+            "developer instructions should align with higher batch targets"
+        );
+        assert!(
+            AUTO_CONTINUE_DEVELOPER_INSTRUCTIONS.contains("12+"),
+            "developer instructions should set a minimum task bar"
+        );
+        assert!(
+            AUTO_CONTINUE_DEVELOPER_INSTRUCTIONS.contains("three substantial deliverables"),
+            "developer instructions should require multiple substantial deliverables"
         );
     }
 }
