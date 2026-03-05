@@ -1,5 +1,6 @@
 use crate::config_loader::ConfigLayerStack;
 use crate::features::is_known_feature_key;
+use codex_app_server_protocol::ConfigLayerSource;
 use std::collections::BTreeSet;
 use toml::Value as TomlValue;
 
@@ -17,11 +18,23 @@ pub(crate) fn uses_deprecated_tools_web_search(config_layer_stack: &ConfigLayerS
         .any(|layer| toml_uses_deprecated_tools_web_search(&layer.config))
 }
 
+pub(crate) fn deprecated_tools_web_search_sources(
+    config_layer_stack: &ConfigLayerStack,
+) -> Vec<ConfigLayerSource> {
+    collect_layer_sources(config_layer_stack, toml_uses_deprecated_tools_web_search)
+}
+
 pub(crate) fn uses_deprecated_features_web_search(config_layer_stack: &ConfigLayerStack) -> bool {
     config_layer_stack
         .layers_high_to_low()
         .into_iter()
         .any(|layer| toml_uses_deprecated_features_web_search(&layer.config))
+}
+
+pub(crate) fn deprecated_features_web_search_sources(
+    config_layer_stack: &ConfigLayerStack,
+) -> Vec<ConfigLayerSource> {
+    collect_layer_sources(config_layer_stack, toml_uses_deprecated_features_web_search)
 }
 
 pub(crate) fn unknown_feature_keys(config_layer_stack: &ConfigLayerStack) -> Vec<String> {
@@ -89,10 +102,37 @@ fn tools_table_has_web_search(value: Option<&TomlValue>) -> bool {
         .is_some_and(|tools| tools.contains_key("web_search"))
 }
 
+pub(crate) fn describe_layer_source(source: &ConfigLayerSource) -> String {
+    match source {
+        ConfigLayerSource::Mdm { domain, key } => format!("mdm:{domain}:{key}"),
+        ConfigLayerSource::System { file } => format!("system:{}", file.display()),
+        ConfigLayerSource::User { file } => format!("user:{}", file.display()),
+        ConfigLayerSource::Project { dot_codex_folder } => {
+            format!("project:{}", dot_codex_folder.display())
+        }
+        ConfigLayerSource::SessionFlags => "session-flags".to_string(),
+        ConfigLayerSource::LegacyManagedConfigTomlFromFile { file } => {
+            format!("legacy-managed:{}", file.display())
+        }
+        ConfigLayerSource::LegacyManagedConfigTomlFromMdm => "legacy-managed-mdm".to_string(),
+    }
+}
+
 fn features_table_has_web_search(value: Option<&TomlValue>) -> bool {
     value
         .and_then(TomlValue::as_table)
         .is_some_and(|features| features.contains_key("web_search"))
+}
+
+fn collect_layer_sources(
+    config_layer_stack: &ConfigLayerStack,
+    predicate: fn(&TomlValue) -> bool,
+) -> Vec<ConfigLayerSource> {
+    config_layer_stack
+        .layers_high_to_low()
+        .into_iter()
+        .filter_map(|layer| predicate(&layer.config).then(|| layer.name.clone()))
+        .collect()
 }
 
 fn collect_unknown_feature_keys(value: &TomlValue, keys: &mut BTreeSet<String>) {

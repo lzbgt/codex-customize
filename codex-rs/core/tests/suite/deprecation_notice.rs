@@ -156,7 +156,7 @@ async fn emits_deprecation_notice_for_tools_web_search() -> anyhow::Result<()> {
     assert_eq!(
         details.as_deref(),
         Some(
-            "If you only need the raw tool toggle, set `[features].web_search_request = true` in config.toml."
+            "Detected in: user:/tmp/config.toml. If you only need the raw tool toggle, set `[features].web_search_request = true` in config.toml."
         ),
     );
 
@@ -208,7 +208,7 @@ async fn emits_deprecation_notice_for_features_web_search() -> anyhow::Result<()
     assert_eq!(
         details.as_deref(),
         Some(
-            "If you also want to enable the built-in web search tool, set `web_search = \"live\" | \"cached\" | \"disabled\"`."
+            "Detected in: user:/tmp/config.toml. If you also want to enable the built-in web search tool, set `web_search = \"live\" | \"cached\" | \"disabled\"`."
         ),
     );
 

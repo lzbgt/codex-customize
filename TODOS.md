@@ -21,7 +21,6 @@ This file tracks high-impact work items for this repo. Ordering is by priority (
 ## P2
 
 - Decide whether `rg` should be bundled for Windows/Linux distributions (currently only `apply_patch` is bundled in the x64 zips).
-- Trace any lingering `tools.web_search` legacy warnings to their config source (managed prefs or managed_config) and document the cleanup path.
 
 ## Done
 
@@ -72,6 +71,7 @@ This file tracks high-impact work items for this repo. Ordering is by priority (
 - Removed `[tools].web_search` config plumbing; migrated config RPC tests to `web_search` mode.
 - Removed legacy `[features].web_search` alias handling.
 - Removed `tools_web_search_request` overrides from config harness.
+- Deprecation notices now include config-layer sources for `tools.web_search`/`features.web_search` to speed cleanup.
 - Added EventBroker pause/resume/paused-duration stats and watchdog logging for hang triage.
 - Added macOS hang capture helper, SIGUSR1 diagnostics, and TUI hang debugging doc.
 - Honored `tools.view_image`/profile overrides by gating the tool registry, with coverage tests.

@@ -705,6 +705,20 @@ impl Session {
                 msg: EventMsg::DeprecationNotice(DeprecationNoticeEvent { summary, details }),
             });
         }
+        let format_deprecated_web_search_details =
+            |sources: &[codex_app_server_protocol::ConfigLayerSource], guidance: &str| {
+                if sources.is_empty() {
+                    guidance.to_string()
+                } else {
+                    let source_list = sources
+                        .iter()
+                        .map(crate::config::describe_layer_source)
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    format!("Detected in: {source_list}. {guidance}")
+                }
+            };
+
         if crate::config::uses_deprecated_instructions_file(&config.config_layer_stack) {
             post_session_configured_events.push(Event {
                 id: INITIAL_SUBMIT_ID.to_owned(),
@@ -719,28 +733,32 @@ impl Session {
             });
         }
         if crate::config::uses_deprecated_tools_web_search(&config.config_layer_stack) {
+            let sources =
+                crate::config::deprecated_tools_web_search_sources(&config.config_layer_stack);
             post_session_configured_events.push(Event {
                 id: INITIAL_SUBMIT_ID.to_owned(),
                 msg: EventMsg::DeprecationNotice(DeprecationNoticeEvent {
                     summary: "`tools.web_search` is deprecated and ignored. Use `web_search = \"live\" | \"cached\" | \"disabled\"` instead."
                         .to_string(),
-                    details: Some(
-                        "If you only need the raw tool toggle, set `[features].web_search_request = true` in config.toml."
-                            .to_string(),
-                    ),
+                    details: Some(format_deprecated_web_search_details(
+                        &sources,
+                        "If you only need the raw tool toggle, set `[features].web_search_request = true` in config.toml.",
+                    )),
                 }),
             });
         }
         if crate::config::uses_deprecated_features_web_search(&config.config_layer_stack) {
+            let sources =
+                crate::config::deprecated_features_web_search_sources(&config.config_layer_stack);
             post_session_configured_events.push(Event {
                 id: INITIAL_SUBMIT_ID.to_owned(),
                 msg: EventMsg::DeprecationNotice(DeprecationNoticeEvent {
                     summary: "`features.web_search` is deprecated and ignored. Use `[features].web_search_request` instead."
                         .to_string(),
-                    details: Some(
-                        "If you also want to enable the built-in web search tool, set `web_search = \"live\" | \"cached\" | \"disabled\"`."
-                            .to_string(),
-                    ),
+                    details: Some(format_deprecated_web_search_details(
+                        &sources,
+                        "If you also want to enable the built-in web search tool, set `web_search = \"live\" | \"cached\" | \"disabled\"`.",
+                    )),
                 }),
             });
         }
