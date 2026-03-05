@@ -243,6 +243,7 @@ fn print_layers_json(config: &Config) {
             serde_json::json!({
                 "source": describe_layer_source(&layer.name),
                 "version": layer.version,
+                "enabled": !layer.is_disabled(),
                 "disabled_reason": layer.disabled_reason,
                 "deprecated_keys": deprecated,
             })

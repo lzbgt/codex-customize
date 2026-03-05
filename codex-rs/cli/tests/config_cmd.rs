@@ -152,6 +152,10 @@ fn layers_json_reports_deprecated_keys() -> Result<()> {
         .iter()
         .find(|entry| entry.get("source").and_then(JsonValue::as_str) == Some(&expected_source))
         .expect("user layer");
+    assert_eq!(
+        layer.get("enabled").and_then(JsonValue::as_bool),
+        Some(true)
+    );
     let deprecated = layer
         .get("deprecated_keys")
         .and_then(JsonValue::as_array)
