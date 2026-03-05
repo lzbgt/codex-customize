@@ -70,6 +70,10 @@ Example: `codex config layers --json`
     {
       "precedence": 0,
       "source": "user:/home/me/.codex/config.toml",
+      "source_kind": "user",
+      "source_path": "/home/me/.codex/config.toml",
+      "source_domain": null,
+      "source_key": null,
       "version": "<hash>",
       "enabled": true,
       "disabled_reason": null,
