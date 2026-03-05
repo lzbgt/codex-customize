@@ -227,6 +227,8 @@ fn layers_json_reports_deprecated_keys() -> Result<()> {
     assert!(deprecated_values.contains(&"experimental_instructions_file"));
     assert!(deprecated_values.contains(&"tools.web_search"));
     assert!(deprecated_values.contains(&"features.web_search"));
+    assert_eq!(layer.get("source_domain").and_then(JsonValue::as_str), None);
+    assert_eq!(layer.get("source_key").and_then(JsonValue::as_str), None);
 
     Ok(())
 }
@@ -371,6 +373,16 @@ fn layers_json_reports_session_flags_precedence() -> Result<()> {
     assert_eq!(
         session_layer.get("source_kind").and_then(JsonValue::as_str),
         Some("session-flags")
+    );
+    assert_eq!(
+        session_layer
+            .get("source_domain")
+            .and_then(JsonValue::as_str),
+        None
+    );
+    assert_eq!(
+        session_layer.get("source_key").and_then(JsonValue::as_str),
+        None
     );
 
     Ok(())
