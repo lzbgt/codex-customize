@@ -1157,6 +1157,9 @@ impl ConfigToml {
                 if let Some(profile) = self.profiles.get(key.as_str()) {
                     return Ok(profile.clone());
                 }
+                if key.eq_ignore_ascii_case("yolo") {
+                    return Ok(ConfigProfile::default());
+                }
 
                 Err(std::io::Error::new(
                     std::io::ErrorKind::NotFound,
@@ -2479,6 +2482,20 @@ profile = "project"
             &SandboxPolicy::DangerFullAccess
         ));
         assert!(config.did_user_set_custom_approval_policy_or_sandbox_mode);
+
+        Ok(())
+    }
+
+    #[test]
+    fn get_config_profile_accepts_yolo_without_definition() -> std::io::Result<()> {
+        let config = ConfigToml {
+            profile: Some("yolo".to_string()),
+            ..Default::default()
+        };
+
+        let profile = config.get_config_profile(None)?;
+
+        assert_eq!(profile, ConfigProfile::default());
 
         Ok(())
     }
