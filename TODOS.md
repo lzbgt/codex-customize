@@ -60,7 +60,7 @@ This file tracks high-impact work items for this repo. Ordering is by priority (
 - YOLO now force-resets shell environment policy overrides to ensure full env inheritance.
 - YOLO CLI help text now mentions full env inheritance behavior.
 - YOLO profile now enforces the same full-power overrides as `--yolo`.
-- YOLO profile bypasses requirements/allowlists for approvals, sandboxing, and MCP servers.
+- YOLO profile bypasses requirements/allowlists and managed config layers for approvals, sandboxing, and MCP servers.
 - Auto-continue guidance now targets 36+ tasks per turn and at least four substantial deliverables.
 - Auto-continue CLI/config docs now mention the 36-48 task batching target.
 - YOLO docs now state that Codex applies no internal restrictions and relies on host security.

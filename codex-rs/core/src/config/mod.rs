@@ -406,16 +406,34 @@ impl ConfigBuilder {
         let codex_home = codex_home.map_or_else(find_codex_home, std::io::Result::Ok)?;
         let cli_overrides = cli_overrides.unwrap_or_default();
         let mut harness_overrides = harness_overrides.unwrap_or_default();
-        let loader_overrides = loader_overrides.unwrap_or_default();
+        let mut loader_overrides = loader_overrides.unwrap_or_default();
         let cwd_override = harness_overrides.cwd.as_deref().or(fallback_cwd.as_deref());
         let cwd = match cwd_override {
             Some(path) => AbsolutePathBuf::try_from(path)?,
             None => AbsolutePathBuf::current_dir()?,
         };
         harness_overrides.cwd = Some(cwd.to_path_buf());
-        let config_layer_stack =
-            load_config_layers_state(&codex_home, Some(cwd), &cli_overrides, loader_overrides)
+        let mut config_layer_stack =
+            load_config_layers_state(&codex_home, Some(cwd), &cli_overrides, loader_overrides.clone())
                 .await?;
+        let yolo_requested = config_layer_stack_requests_yolo(&config_layer_stack)
+            || harness_overrides
+                .config_profile
+                .as_deref()
+                .is_some_and(|profile| profile.eq_ignore_ascii_case("yolo"));
+        if yolo_requested
+            && (!loader_overrides.skip_managed_config_layers || !loader_overrides.skip_requirements)
+        {
+            loader_overrides.skip_requirements = true;
+            loader_overrides.skip_managed_config_layers = true;
+            config_layer_stack = load_config_layers_state(
+                &codex_home,
+                Some(cwd),
+                &cli_overrides,
+                loader_overrides,
+            )
+            .await?;
+        }
         let merged_toml = config_layer_stack.effective_config();
 
         // Note that each layer in ConfigLayerStack should have resolved
@@ -521,13 +539,27 @@ pub async fn load_config_as_toml_with_cli_overrides_and_loader_overrides(
     cli_overrides: Vec<(String, TomlValue)>,
     loader_overrides: LoaderOverrides,
 ) -> std::io::Result<ConfigToml> {
-    let config_layer_stack = load_config_layers_state(
+    let mut loader_overrides = loader_overrides;
+    let mut config_layer_stack = load_config_layers_state(
         codex_home,
         Some(cwd.clone()),
         &cli_overrides,
-        loader_overrides,
+        loader_overrides.clone(),
     )
     .await?;
+    if config_layer_stack_requests_yolo(&config_layer_stack)
+        && (!loader_overrides.skip_managed_config_layers || !loader_overrides.skip_requirements)
+    {
+        loader_overrides.skip_requirements = true;
+        loader_overrides.skip_managed_config_layers = true;
+        config_layer_stack = load_config_layers_state(
+            codex_home,
+            Some(cwd.clone()),
+            &cli_overrides,
+            loader_overrides,
+        )
+        .await?;
+    }
 
     let merged_toml = config_layer_stack.effective_config();
     let cfg = deserialize_config_toml_with_base(merged_toml, codex_home).map_err(|e| {
@@ -536,6 +568,17 @@ pub async fn load_config_as_toml_with_cli_overrides_and_loader_overrides(
     })?;
 
     Ok(cfg)
+}
+
+fn config_layer_stack_requests_yolo(config_layer_stack: &ConfigLayerStack) -> bool {
+    config_layer_stack.layers_high_to_low().iter().any(|layer| {
+        layer
+            .config
+            .as_table()
+            .and_then(|table| table.get("profile"))
+            .and_then(TomlValue::as_str)
+            .is_some_and(|profile| profile.eq_ignore_ascii_case("yolo"))
+    })
 }
 
 pub(crate) fn deserialize_config_toml_with_base(
@@ -2639,6 +2682,58 @@ profile = "project"
             .expect("expected mcp server");
         assert!(server.enabled);
         assert_eq!(server.disabled_reason, None);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn yolo_profile_skips_managed_config_in_toml_load() -> anyhow::Result<()> {
+        let codex_home = TempDir::new()?;
+        let config_path = codex_home.path().join(CONFIG_TOML_FILE);
+        std::fs::write(&config_path, "profile = \"yolo\"\n")?;
+        let managed_path = codex_home.path().join("managed_config.toml");
+        std::fs::write(&managed_path, "review_model = \"managed\"\n")?;
+        let cwd = AbsolutePathBuf::try_from(codex_home.path())?;
+
+        let cfg = load_config_as_toml_with_cli_overrides_and_loader_overrides(
+            codex_home.path(),
+            &cwd,
+            Vec::new(),
+            LoaderOverrides {
+                managed_config_path: Some(managed_path),
+                ..Default::default()
+            },
+        )
+        .await?;
+
+        assert_eq!(cfg.review_model, None);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn yolo_profile_override_skips_managed_config_in_builder() -> anyhow::Result<()> {
+        let codex_home = TempDir::new()?;
+        let managed_path = codex_home.path().join("managed_config.toml");
+        std::fs::write(&managed_path, "review_model = \"managed\"\n")?;
+        let workspace_dir = codex_home.path().join("workspace");
+        std::fs::create_dir_all(&workspace_dir)?;
+
+        let config = ConfigBuilder::default()
+            .codex_home(codex_home.path().to_path_buf())
+            .harness_overrides(ConfigOverrides {
+                config_profile: Some("yolo".to_string()),
+                cwd: Some(workspace_dir),
+                ..Default::default()
+            })
+            .loader_overrides(LoaderOverrides {
+                managed_config_path: Some(managed_path),
+                ..Default::default()
+            })
+            .build()
+            .await?;
+
+        assert_eq!(config.review_model, None);
 
         Ok(())
     }

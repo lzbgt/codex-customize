@@ -131,7 +131,7 @@ pub async fn run_main(cli: Cli, codex_linux_sandbox_exe: Option<PathBuf>) -> any
     } else {
         sandbox_mode_cli_arg.map(Into::<SandboxMode>::into)
     };
-    let loader_overrides = if dangerously_bypass_approvals_and_sandbox {
+    let mut loader_overrides = if dangerously_bypass_approvals_and_sandbox {
         LoaderOverrides {
             skip_requirements: true,
             skip_managed_config_layers: true,
@@ -140,6 +140,13 @@ pub async fn run_main(cli: Cli, codex_linux_sandbox_exe: Option<PathBuf>) -> any
     } else {
         LoaderOverrides::default()
     };
+    if config_profile
+        .as_deref()
+        .is_some_and(|profile| profile.eq_ignore_ascii_case("yolo"))
+    {
+        loader_overrides.skip_requirements = true;
+        loader_overrides.skip_managed_config_layers = true;
+    }
 
     if dangerously_bypass_approvals_and_sandbox {
         config_overrides.append_yolo_overrides();

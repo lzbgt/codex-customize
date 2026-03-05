@@ -134,7 +134,7 @@ pub async fn run_main(
             cli.approval_policy.map(Into::into),
         )
     };
-    let loader_overrides = if cli.dangerously_bypass_approvals_and_sandbox {
+    let mut loader_overrides = if cli.dangerously_bypass_approvals_and_sandbox {
         LoaderOverrides {
             skip_requirements: true,
             skip_managed_config_layers: true,
@@ -143,6 +143,14 @@ pub async fn run_main(
     } else {
         LoaderOverrides::default()
     };
+    if cli
+        .config_profile
+        .as_deref()
+        .is_some_and(|profile| profile.eq_ignore_ascii_case("yolo"))
+    {
+        loader_overrides.skip_requirements = true;
+        loader_overrides.skip_managed_config_layers = true;
+    }
 
     // Map the legacy --search flag to the canonical web_search mode.
     if cli.web_search {
