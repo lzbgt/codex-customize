@@ -112,7 +112,7 @@ pub struct Cli {
     /// After each completed turn, automatically continue with the next most urgent task(s)
     /// without waiting for user input (unless the agent explicitly requests stop).
     /// The follow-up "Continue" also grants approval for any required step unless declined.
-    /// The follow-up prompt targets 12-18 related tasks per turn (minimum 12).
+    /// The follow-up prompt targets 18-24 related tasks per turn (minimum 18).
     #[arg(long = "auto-continue", default_value_t = false)]
     pub auto_continue: bool,
 

@@ -744,6 +744,18 @@ impl Session {
                 }),
             });
         }
+        let unknown_feature_keys = crate::config::unknown_feature_keys(&config.config_layer_stack);
+        if !unknown_feature_keys.is_empty() {
+            let key_list = unknown_feature_keys.join(", ");
+            post_session_configured_events.push(Event {
+                id: INITIAL_SUBMIT_ID.to_owned(),
+                msg: EventMsg::Warning(WarningEvent {
+                    message: format!(
+                        "Unknown [features] keys ignored: {key_list}. See docs/config.md for supported feature flags."
+                    ),
+                }),
+            });
+        }
         maybe_push_chat_wire_api_deprecation(&config, &mut post_session_configured_events);
 
         let auth = auth.as_ref();

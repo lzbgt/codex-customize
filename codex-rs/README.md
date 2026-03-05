@@ -101,7 +101,7 @@ When enabled, Codex skips approval prompts, runs without sandboxing, bypasses ma
 
 ### Auto-continue (TUI)
 
-When `--auto-continue` is enabled, the TUI submits a curated "Continue" follow-up prompt after each turn unless the agent requests stop. That follow-up also counts as approval for any previously requested required step (such as a full test suite) unless the user explicitly declined. The follow-up prompt instructs the agent to batch 12-18 related tasks per turn (minimum 12) and avoid micro-fixes. Use `--auto-continue-max-turns N` to cap how many turns will run.
+When `--auto-continue` is enabled, the TUI submits a curated "Continue" follow-up prompt after each turn unless the agent requests stop. That follow-up also counts as approval for any previously requested required step (such as a full test suite) unless the user explicitly declined. The follow-up prompt instructs the agent to batch 18-24 related tasks per turn (minimum 18) and avoid micro-fixes. Use `--auto-continue-max-turns N` to cap how many turns will run.
 
 ## Code Organization
 

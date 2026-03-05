@@ -76,9 +76,14 @@ pub mod profile;
 pub mod schema;
 pub mod service;
 pub mod types;
+mod warnings;
 pub use constraint::Constrained;
 pub use constraint::ConstraintError;
 pub use constraint::ConstraintResult;
+pub(crate) use warnings::unknown_feature_keys;
+pub(crate) use warnings::uses_deprecated_features_web_search;
+pub(crate) use warnings::uses_deprecated_instructions_file;
+pub(crate) use warnings::uses_deprecated_tools_web_search;
 
 pub use service::ConfigService;
 pub use service::ConfigServiceError;
@@ -1706,90 +1711,6 @@ impl Config {
             self.features.disable(Feature::WindowsSandboxElevated);
         }
     }
-}
-
-pub(crate) fn uses_deprecated_instructions_file(config_layer_stack: &ConfigLayerStack) -> bool {
-    config_layer_stack
-        .layers_high_to_low()
-        .into_iter()
-        .any(|layer| toml_uses_deprecated_instructions_file(&layer.config))
-}
-
-pub(crate) fn uses_deprecated_tools_web_search(config_layer_stack: &ConfigLayerStack) -> bool {
-    config_layer_stack
-        .layers_high_to_low()
-        .into_iter()
-        .any(|layer| toml_uses_deprecated_tools_web_search(&layer.config))
-}
-
-pub(crate) fn uses_deprecated_features_web_search(config_layer_stack: &ConfigLayerStack) -> bool {
-    config_layer_stack
-        .layers_high_to_low()
-        .into_iter()
-        .any(|layer| toml_uses_deprecated_features_web_search(&layer.config))
-}
-
-fn toml_uses_deprecated_instructions_file(value: &TomlValue) -> bool {
-    let Some(table) = value.as_table() else {
-        return false;
-    };
-    if table.contains_key("experimental_instructions_file") {
-        return true;
-    }
-    let Some(profiles) = table.get("profiles").and_then(TomlValue::as_table) else {
-        return false;
-    };
-    profiles.values().any(|profile| {
-        profile.as_table().is_some_and(|profile_table| {
-            profile_table.contains_key("experimental_instructions_file")
-        })
-    })
-}
-
-fn toml_uses_deprecated_tools_web_search(value: &TomlValue) -> bool {
-    let Some(table) = value.as_table() else {
-        return false;
-    };
-    if tools_table_has_web_search(table.get("tools")) {
-        return true;
-    }
-    let Some(profiles) = table.get("profiles").and_then(TomlValue::as_table) else {
-        return false;
-    };
-    profiles.values().any(|profile| {
-        profile
-            .as_table()
-            .is_some_and(|profile_table| tools_table_has_web_search(profile_table.get("tools")))
-    })
-}
-
-fn toml_uses_deprecated_features_web_search(value: &TomlValue) -> bool {
-    let Some(table) = value.as_table() else {
-        return false;
-    };
-    if features_table_has_web_search(table.get("features")) {
-        return true;
-    }
-    let Some(profiles) = table.get("profiles").and_then(TomlValue::as_table) else {
-        return false;
-    };
-    profiles.values().any(|profile| {
-        profile.as_table().is_some_and(|profile_table| {
-            features_table_has_web_search(profile_table.get("features"))
-        })
-    })
-}
-
-fn tools_table_has_web_search(value: Option<&TomlValue>) -> bool {
-    value
-        .and_then(TomlValue::as_table)
-        .is_some_and(|tools| tools.contains_key("web_search"))
-}
-
-fn features_table_has_web_search(value: Option<&TomlValue>) -> bool {
-    value
-        .and_then(TomlValue::as_table)
-        .is_some_and(|features| features.contains_key("web_search"))
 }
 
 /// Returns the path to the Codex configuration directory, which can be

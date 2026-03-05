@@ -37,6 +37,8 @@ Some legacy config keys are deprecated or removed:
   set `[features].web_search_request = true`.
 - `[features].web_search` is deprecated and ignored. Use `[features].web_search_request`.
   To enable the built-in web search tool, set `web_search = "live" | "cached" | "disabled"`.
+- Unknown `[features]` keys are ignored with a warning. Check the configuration reference for
+  supported feature flags.
 
 ## CLI overrides
 
@@ -48,7 +50,7 @@ restrictions in YOLO; the user accepts the risk and relies on the host security 
 
 When the TUI runs with `--auto-continue`, the follow-up "Continue" prompt also grants approval
 for any previously requested required step unless the user explicitly declined. The follow-up
-prompt targets 12-18 related tasks per turn (minimum 12). Use `--auto-continue-max-turns N` to cap
+prompt targets 18-24 related tasks per turn (minimum 18). Use `--auto-continue-max-turns N` to cap
 the number of turns.
 
 ## Notices

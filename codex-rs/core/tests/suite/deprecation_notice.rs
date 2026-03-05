@@ -214,3 +214,45 @@ async fn emits_deprecation_notice_for_features_web_search() -> anyhow::Result<()
 
     Ok(())
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn emits_warning_for_unknown_feature_keys() -> anyhow::Result<()> {
+    skip_if_no_network!(Ok(()));
+
+    let server = start_mock_server().await;
+
+    let mut builder = test_codex().with_config(|config| {
+        let mut features = toml::map::Map::new();
+        features.insert("mystery_feature".to_string(), TomlValue::Boolean(true));
+        let mut table = toml::map::Map::new();
+        table.insert("features".to_string(), TomlValue::Table(features));
+        let config_layer = ConfigLayerEntry::new(
+            ConfigLayerSource::User {
+                file: test_absolute_path("/tmp/config.toml"),
+            },
+            TomlValue::Table(table),
+        );
+        let config_layer_stack = ConfigLayerStack::new(
+            vec![config_layer],
+            ConfigRequirements::default(),
+            ConfigRequirementsToml::default(),
+        )
+        .expect("build config layer stack");
+        config.config_layer_stack = config_layer_stack;
+    });
+
+    let TestCodex { codex, .. } = builder.build(&server).await?;
+
+    let warning = wait_for_event_match(&codex, |event| match event {
+        EventMsg::Warning(ev) if ev.message.contains("Unknown [features] keys") => Some(ev.clone()),
+        _ => None,
+    })
+    .await;
+
+    assert_eq!(
+        warning.message,
+        "Unknown [features] keys ignored: mystery_feature. See docs/config.md for supported feature flags.".to_string(),
+    );
+
+    Ok(())
+}
