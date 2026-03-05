@@ -207,9 +207,6 @@
             "unified_exec": {
               "type": "boolean"
             },
-            "web_search": {
-              "type": "boolean"
-            },
             "web_search_cached": {
               "type": "boolean"
             },
@@ -1189,9 +1186,6 @@
           "type": "boolean"
         },
         "unified_exec": {
-          "type": "boolean"
-        },
-        "web_search": {
           "type": "boolean"
         },
         "web_search_cached": {

@@ -35,6 +35,7 @@ Some legacy config keys are deprecated or removed:
 - `[tools].web_search` is no longer accepted. Use the top-level
   `web_search = "disabled" | "cached" | "live"` mode instead. If you need the raw tool toggle,
   set `[features].web_search_request = true`.
+- `[features].web_search` is no longer accepted. Use `[features].web_search_request`.
 
 ## CLI overrides
 

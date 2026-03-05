@@ -25,10 +25,6 @@ const ALIASES: &[Alias] = &[
         legacy_key: "include_apply_patch_tool",
         feature: Feature::ApplyPatchFreeform,
     },
-    Alias {
-        legacy_key: "web_search",
-        feature: Feature::WebSearchRequest,
-    },
 ];
 
 pub(crate) fn legacy_feature_keys() -> impl Iterator<Item = &'static str> {
