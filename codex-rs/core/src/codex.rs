@@ -720,15 +720,17 @@ impl Session {
             };
 
         if crate::config::uses_deprecated_instructions_file(&config.config_layer_stack) {
+            let sources =
+                crate::config::deprecated_instructions_file_sources(&config.config_layer_stack);
             post_session_configured_events.push(Event {
                 id: INITIAL_SUBMIT_ID.to_owned(),
                 msg: EventMsg::DeprecationNotice(DeprecationNoticeEvent {
                     summary: "`experimental_instructions_file` is deprecated and ignored. Use `model_instructions_file` instead."
                         .to_string(),
-                    details: Some(
-                        "Move the setting to `model_instructions_file` in config.toml (or under a profile) to load instructions from a file."
-                            .to_string(),
-                    ),
+                    details: Some(format_deprecated_web_search_details(
+                        &sources,
+                        "Move the setting to `model_instructions_file` in config.toml (or under a profile) to load instructions from a file.",
+                    )),
                 }),
             });
         }

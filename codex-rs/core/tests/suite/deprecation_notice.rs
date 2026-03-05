@@ -104,7 +104,7 @@ async fn emits_deprecation_notice_for_experimental_instructions_file() -> anyhow
     assert_eq!(
         details.as_deref(),
         Some(
-            "Move the setting to `model_instructions_file` in config.toml (or under a profile) to load instructions from a file."
+            "Detected in: user:/tmp/config.toml. Move the setting to `model_instructions_file` in config.toml (or under a profile) to load instructions from a file."
         ),
     );
 

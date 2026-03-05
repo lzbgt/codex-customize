@@ -40,6 +40,17 @@ Some legacy config keys are deprecated or removed:
 - Unknown `[features]` keys are ignored with a warning. Check the configuration reference for
   supported feature flags.
 
+## Config diagnostics
+
+Use the CLI to inspect which configuration layers are active and to surface deprecated keys:
+
+- `codex config layers` shows the active config layers (highest precedence first), including
+  disabled layers and any deprecated keys detected per layer.
+- `codex config warnings` summarizes deprecated keys and unknown `[features]` entries.
+
+Pass `--profile` to target a specific profile or `--cwd` to resolve project layers for a
+different working directory.
+
 ## CLI overrides
 
 Codex applies `--config key=value` overrides after loading `~/.codex/config.toml`, so the CLI wins

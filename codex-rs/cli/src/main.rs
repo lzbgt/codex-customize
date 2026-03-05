@@ -34,10 +34,12 @@ use supports_color::Stream;
 #[macro_use]
 mod output;
 
+mod config_cmd;
 mod mcp_cmd;
 #[cfg(not(windows))]
 mod wsl_paths;
 
+use crate::config_cmd::ConfigCli;
 use crate::mcp_cmd::McpCli;
 
 use codex_core::config::Config;
@@ -130,6 +132,9 @@ enum Subcommand {
     /// Internal: relay stdio to a Unix domain socket.
     #[clap(hide = true, name = "stdio-to-uds")]
     StdioToUds(StdioToUdsCommand),
+
+    /// Inspect configuration layers and warnings.
+    Config(ConfigCli),
 
     /// Inspect feature flags.
     Features(FeaturesCli),
@@ -672,6 +677,19 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
             let socket_path = cmd.socket_path;
             tokio::task::spawn_blocking(move || codex_stdio_to_uds::run(socket_path.as_path()))
                 .await??;
+        }
+        Some(Subcommand::Config(mut config_cli)) => {
+            prepend_config_flags(
+                &mut config_cli.config_overrides,
+                root_config_overrides.clone(),
+            );
+            config_cli
+                .run(config_cmd::ConfigContext {
+                    config_profile: interactive.config_profile.clone(),
+                    cwd: interactive.cwd.clone(),
+                    web_search: interactive.web_search,
+                })
+                .await?;
         }
         Some(Subcommand::Features(FeaturesCli { sub })) => match sub {
             FeaturesSubcommand::List => {

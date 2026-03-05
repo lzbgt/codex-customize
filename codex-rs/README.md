@@ -24,7 +24,7 @@ The Rust implementation is now the maintained Codex CLI and serves as the defaul
 
 ### Config
 
-Codex supports a rich set of configuration options. Note that the Rust CLI uses `config.toml` instead of `config.json`. See [`docs/config.md`](../docs/config.md) for details.
+Codex supports a rich set of configuration options. Note that the Rust CLI uses `config.toml` instead of `config.json`. See [`docs/config.md`](../docs/config.md) for details. Use `codex config layers` and `codex config warnings` to inspect active layers and deprecated keys.
 
 ### Model Context Protocol Support
 

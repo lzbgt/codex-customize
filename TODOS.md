@@ -72,6 +72,7 @@ This file tracks high-impact work items for this repo. Ordering is by priority (
 - Removed legacy `[features].web_search` alias handling.
 - Removed `tools_web_search_request` overrides from config harness.
 - Deprecation notices now include config-layer sources for `tools.web_search`/`features.web_search` to speed cleanup.
+- Added `codex config layers` and `codex config warnings` for layer/deprecation diagnostics.
 - Added EventBroker pause/resume/paused-duration stats and watchdog logging for hang triage.
 - Added macOS hang capture helper, SIGUSR1 diagnostics, and TUI hang debugging doc.
 - Honored `tools.view_image`/profile overrides by gating the tool registry, with coverage tests.

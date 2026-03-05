@@ -11,6 +11,12 @@ pub(crate) fn uses_deprecated_instructions_file(config_layer_stack: &ConfigLayer
         .any(|layer| toml_uses_deprecated_instructions_file(&layer.config))
 }
 
+pub fn deprecated_instructions_file_sources(
+    config_layer_stack: &ConfigLayerStack,
+) -> Vec<ConfigLayerSource> {
+    collect_layer_sources(config_layer_stack, toml_uses_deprecated_instructions_file)
+}
+
 pub(crate) fn uses_deprecated_tools_web_search(config_layer_stack: &ConfigLayerStack) -> bool {
     config_layer_stack
         .layers_high_to_low()
@@ -18,7 +24,7 @@ pub(crate) fn uses_deprecated_tools_web_search(config_layer_stack: &ConfigLayerS
         .any(|layer| toml_uses_deprecated_tools_web_search(&layer.config))
 }
 
-pub(crate) fn deprecated_tools_web_search_sources(
+pub fn deprecated_tools_web_search_sources(
     config_layer_stack: &ConfigLayerStack,
 ) -> Vec<ConfigLayerSource> {
     collect_layer_sources(config_layer_stack, toml_uses_deprecated_tools_web_search)
@@ -31,10 +37,23 @@ pub(crate) fn uses_deprecated_features_web_search(config_layer_stack: &ConfigLay
         .any(|layer| toml_uses_deprecated_features_web_search(&layer.config))
 }
 
-pub(crate) fn deprecated_features_web_search_sources(
+pub fn deprecated_features_web_search_sources(
     config_layer_stack: &ConfigLayerStack,
 ) -> Vec<ConfigLayerSource> {
     collect_layer_sources(config_layer_stack, toml_uses_deprecated_features_web_search)
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct DeprecatedWebSearchFlags {
+    pub tools_web_search: bool,
+    pub features_web_search: bool,
+}
+
+pub fn deprecated_web_search_flags(value: &TomlValue) -> DeprecatedWebSearchFlags {
+    DeprecatedWebSearchFlags {
+        tools_web_search: toml_uses_deprecated_tools_web_search(value),
+        features_web_search: toml_uses_deprecated_features_web_search(value),
+    }
 }
 
 pub(crate) fn unknown_feature_keys(config_layer_stack: &ConfigLayerStack) -> Vec<String> {
@@ -102,7 +121,7 @@ fn tools_table_has_web_search(value: Option<&TomlValue>) -> bool {
         .is_some_and(|tools| tools.contains_key("web_search"))
 }
 
-pub(crate) fn describe_layer_source(source: &ConfigLayerSource) -> String {
+pub fn describe_layer_source(source: &ConfigLayerSource) -> String {
     match source {
         ConfigLayerSource::Mdm { domain, key } => format!("mdm:{domain}:{key}"),
         ConfigLayerSource::System { file } => format!("system:{}", file.display()),
