@@ -731,6 +731,19 @@ impl Session {
                 }),
             });
         }
+        if crate::config::uses_deprecated_features_web_search(&config.config_layer_stack) {
+            post_session_configured_events.push(Event {
+                id: INITIAL_SUBMIT_ID.to_owned(),
+                msg: EventMsg::DeprecationNotice(DeprecationNoticeEvent {
+                    summary: "`features.web_search` is deprecated and ignored. Use `[features].web_search_request` instead."
+                        .to_string(),
+                    details: Some(
+                        "If you also want to enable the built-in web search tool, set `web_search = \"live\" | \"cached\" | \"disabled\"`."
+                            .to_string(),
+                    ),
+                }),
+            });
+        }
         maybe_push_chat_wire_api_deprecation(&config, &mut post_session_configured_events);
 
         let auth = auth.as_ref();
