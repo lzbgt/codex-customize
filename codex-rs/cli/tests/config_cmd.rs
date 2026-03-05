@@ -238,6 +238,13 @@ fn layers_json_reports_context() -> Result<()> {
         parsed.get("cwd").and_then(JsonValue::as_str),
         Some(cwd.to_string_lossy().as_ref())
     );
+    assert_eq!(
+        parsed.get("layer_count").and_then(JsonValue::as_u64),
+        parsed
+            .get("layers")
+            .and_then(JsonValue::as_array)
+            .map(|layers| layers.len() as u64)
+    );
 
     Ok(())
 }

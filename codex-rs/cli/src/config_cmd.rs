@@ -255,6 +255,7 @@ fn print_layers_json(config: &Config) {
     let payload = serde_json::json!({
         "profile": config.active_profile.clone(),
         "cwd": config.cwd,
+        "layer_count": layers_json.len(),
         "layers": layers_json,
     });
     let output = serde_json::to_string_pretty(&payload).unwrap_or_else(|_| "{}".to_string());
