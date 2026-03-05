@@ -249,9 +249,44 @@ fn print_layers_json(config: &Config) {
             if features_sources.contains(&layer.name) {
                 deprecated.push("features.web_search");
             }
+            let (source_kind, source_path, source_domain, source_key) = match &layer.name {
+                codex_app_server_protocol::ConfigLayerSource::Mdm { domain, key } => {
+                    ("mdm", None, Some(domain.as_str()), Some(key.as_str()))
+                }
+                codex_app_server_protocol::ConfigLayerSource::System { file } => {
+                    ("system", Some(file.display().to_string()), None, None)
+                }
+                codex_app_server_protocol::ConfigLayerSource::User { file } => {
+                    ("user", Some(file.display().to_string()), None, None)
+                }
+                codex_app_server_protocol::ConfigLayerSource::Project { dot_codex_folder } => (
+                    "project",
+                    Some(dot_codex_folder.display().to_string()),
+                    None,
+                    None,
+                ),
+                codex_app_server_protocol::ConfigLayerSource::SessionFlags => {
+                    ("session-flags", None, None, None)
+                }
+                codex_app_server_protocol::ConfigLayerSource::LegacyManagedConfigTomlFromFile {
+                    file,
+                } => (
+                    "legacy-managed-file",
+                    Some(file.display().to_string()),
+                    None,
+                    None,
+                ),
+                codex_app_server_protocol::ConfigLayerSource::LegacyManagedConfigTomlFromMdm => {
+                    ("legacy-managed-mdm", None, None, None)
+                }
+            };
             serde_json::json!({
                 "precedence": index,
                 "source": describe_layer_source(&layer.name),
+                "source_kind": source_kind,
+                "source_path": source_path,
+                "source_domain": source_domain,
+                "source_key": source_key,
                 "version": layer.version,
                 "enabled": !layer.is_disabled(),
                 "disabled_reason": layer.disabled_reason,

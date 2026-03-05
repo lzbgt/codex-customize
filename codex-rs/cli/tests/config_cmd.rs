@@ -208,6 +208,14 @@ fn layers_json_reports_deprecated_keys() -> Result<()> {
         .expect("user layer");
     assert_eq!(layer.get("precedence").and_then(JsonValue::as_u64), Some(0));
     assert_eq!(
+        layer.get("source_kind").and_then(JsonValue::as_str),
+        Some("user")
+    );
+    assert_eq!(
+        layer.get("source_path").and_then(JsonValue::as_str),
+        Some(expected_path.to_string_lossy().as_ref())
+    );
+    assert_eq!(
         layer.get("enabled").and_then(JsonValue::as_bool),
         Some(true)
     );
@@ -359,6 +367,10 @@ fn layers_json_reports_session_flags_precedence() -> Result<()> {
     assert_eq!(
         session_layer.get("precedence").and_then(JsonValue::as_u64),
         Some(0)
+    );
+    assert_eq!(
+        session_layer.get("source_kind").and_then(JsonValue::as_str),
+        Some("session-flags")
     );
 
     Ok(())

@@ -49,7 +49,8 @@ Use the CLI to inspect which configuration layers are active and to surface depr
 - `codex config warnings` summarizes deprecated keys and unknown `[features]` entries.
 - Use `--json` with either subcommand to emit machine-readable output.
   The JSON payload for `layers` includes `source`, `version`, `enabled`, `disabled_reason`,
-  `precedence` (0 = highest), `deprecated_keys` for each layer, and `layer_count`.
+  `precedence` (0 = highest), `deprecated_keys` for each layer, `layer_count`, and
+  source metadata (`source_kind`, `source_path`, `source_domain`, `source_key`).
   The JSON payload for `warnings` includes `has_warnings`, `deprecated_count`,
   `warnings_count`, and per-key `counts`.
   Both JSON payloads include `profile` and `cwd` metadata for context.
