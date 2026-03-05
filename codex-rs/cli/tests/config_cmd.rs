@@ -106,6 +106,14 @@ fn warnings_json_reports_sources() -> Result<()> {
         parsed.get("has_warnings").and_then(JsonValue::as_bool),
         Some(true)
     );
+    assert_eq!(
+        parsed.get("deprecated_count").and_then(JsonValue::as_u64),
+        Some(3)
+    );
+    assert_eq!(
+        parsed.get("warnings_count").and_then(JsonValue::as_u64),
+        Some(4)
+    );
     let instructions_sources = deprecated
         .get("experimental_instructions_file")
         .and_then(JsonValue::as_array)
@@ -262,6 +270,14 @@ fn warnings_json_reports_no_warnings() -> Result<()> {
     assert_eq!(
         parsed.get("has_warnings").and_then(JsonValue::as_bool),
         Some(false)
+    );
+    assert_eq!(
+        parsed.get("deprecated_count").and_then(JsonValue::as_u64),
+        Some(0)
+    );
+    assert_eq!(
+        parsed.get("warnings_count").and_then(JsonValue::as_u64),
+        Some(0)
     );
 
     let counts = parsed

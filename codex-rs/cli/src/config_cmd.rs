@@ -271,11 +271,16 @@ fn print_warnings_json(config: &Config) {
         || !tools_sources.is_empty()
         || !features_sources.is_empty()
         || !unknown_features.is_empty();
+    let deprecated_count =
+        instructions_sources.len() + tools_sources.len() + features_sources.len();
+    let warnings_count = deprecated_count + unknown_features.len();
 
     let payload = serde_json::json!({
         "profile": config.active_profile.clone(),
         "cwd": config.cwd,
         "has_warnings": has_warnings,
+        "deprecated_count": deprecated_count,
+        "warnings_count": warnings_count,
         "deprecated": {
             "experimental_instructions_file": format_sources_json(&instructions_sources),
             "tools.web_search": format_sources_json(&tools_sources),
