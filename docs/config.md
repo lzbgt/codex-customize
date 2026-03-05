@@ -32,10 +32,10 @@ The generated JSON Schema for `config.toml` lives at `codex-rs/core/config.schem
 
 Some legacy config keys are deprecated or removed:
 
-- `[tools].web_search` is no longer accepted. Use the top-level
+- `[tools].web_search` is deprecated and ignored. Use the top-level
   `web_search = "disabled" | "cached" | "live"` mode instead. If you need the raw tool toggle,
   set `[features].web_search_request = true`.
-- `[features].web_search` is no longer accepted. Use `[features].web_search_request`.
+- `[features].web_search` is deprecated and ignored. Use `[features].web_search_request`.
 
 ## CLI overrides
 

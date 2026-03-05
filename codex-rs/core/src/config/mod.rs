@@ -1016,6 +1016,9 @@ impl ProjectConfig {
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, JsonSchema)]
 #[schemars(deny_unknown_fields)]
 pub struct ToolsToml {
+    /// Deprecated: ignored. Use `web_search = "live" | "cached" | "disabled"` instead.
+    #[serde(default)]
+    pub web_search: Option<bool>,
     /// Enable the `view_image` tool that lets the agent attach local images.
     #[serde(default)]
     pub view_image: Option<bool>,
@@ -1032,6 +1035,7 @@ pub struct AgentsToml {
 
 impl From<ToolsToml> for Tools {
     fn from(tools_toml: ToolsToml) -> Self {
+        let _ = tools_toml.web_search;
         Self {
             web_search: None,
             view_image: tools_toml.view_image,
@@ -1711,6 +1715,13 @@ pub(crate) fn uses_deprecated_instructions_file(config_layer_stack: &ConfigLayer
         .any(|layer| toml_uses_deprecated_instructions_file(&layer.config))
 }
 
+pub(crate) fn uses_deprecated_tools_web_search(config_layer_stack: &ConfigLayerStack) -> bool {
+    config_layer_stack
+        .layers_high_to_low()
+        .into_iter()
+        .any(|layer| toml_uses_deprecated_tools_web_search(&layer.config))
+}
+
 fn toml_uses_deprecated_instructions_file(value: &TomlValue) -> bool {
     let Some(table) = value.as_table() else {
         return false;
@@ -1726,6 +1737,29 @@ fn toml_uses_deprecated_instructions_file(value: &TomlValue) -> bool {
             profile_table.contains_key("experimental_instructions_file")
         })
     })
+}
+
+fn toml_uses_deprecated_tools_web_search(value: &TomlValue) -> bool {
+    let Some(table) = value.as_table() else {
+        return false;
+    };
+    if tools_table_has_web_search(table.get("tools")) {
+        return true;
+    }
+    let Some(profiles) = table.get("profiles").and_then(TomlValue::as_table) else {
+        return false;
+    };
+    profiles.values().any(|profile| {
+        profile
+            .as_table()
+            .is_some_and(|profile_table| tools_table_has_web_search(profile_table.get("tools")))
+    })
+}
+
+fn tools_table_has_web_search(value: Option<&TomlValue>) -> bool {
+    value
+        .and_then(TomlValue::as_table)
+        .is_some_and(|tools| tools.contains_key("web_search"))
 }
 
 /// Returns the path to the Codex configuration directory, which can be

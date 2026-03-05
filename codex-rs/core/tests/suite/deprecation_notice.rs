@@ -110,3 +110,55 @@ async fn emits_deprecation_notice_for_experimental_instructions_file() -> anyhow
 
     Ok(())
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn emits_deprecation_notice_for_tools_web_search() -> anyhow::Result<()> {
+    skip_if_no_network!(Ok(()));
+
+    let server = start_mock_server().await;
+
+    let mut builder = test_codex().with_config(|config| {
+        let mut tools = toml::map::Map::new();
+        tools.insert("web_search".to_string(), TomlValue::Boolean(true));
+        let mut table = toml::map::Map::new();
+        table.insert("tools".to_string(), TomlValue::Table(tools));
+        let config_layer = ConfigLayerEntry::new(
+            ConfigLayerSource::User {
+                file: test_absolute_path("/tmp/config.toml"),
+            },
+            TomlValue::Table(table),
+        );
+        let config_layer_stack = ConfigLayerStack::new(
+            vec![config_layer],
+            ConfigRequirements::default(),
+            ConfigRequirementsToml::default(),
+        )
+        .expect("build config layer stack");
+        config.config_layer_stack = config_layer_stack;
+    });
+
+    let TestCodex { codex, .. } = builder.build(&server).await?;
+
+    let notice = wait_for_event_match(&codex, |event| match event {
+        EventMsg::DeprecationNotice(ev) if ev.summary.contains("tools.web_search") => {
+            Some(ev.clone())
+        }
+        _ => None,
+    })
+    .await;
+
+    let DeprecationNoticeEvent { summary, details } = notice;
+    assert_eq!(
+        summary,
+        "`tools.web_search` is deprecated and ignored. Use `web_search = \"live\" | \"cached\" | \"disabled\"` instead."
+            .to_string(),
+    );
+    assert_eq!(
+        details.as_deref(),
+        Some(
+            "If you only need the raw tool toggle, set `[features].web_search_request = true` in config.toml."
+        ),
+    );
+
+    Ok(())
+}

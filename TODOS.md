@@ -58,6 +58,7 @@ This file tracks high-impact work items for this repo. Ordering is by priority (
 - Auto-continue CLI/config docs now mention the 12-18 task batching target.
 - YOLO docs now state that Codex applies no internal restrictions and relies on host security.
 - YOLO overrides now force `features.exec_policy=false` to remove exec-policy gating.
+- Deprecated `tools.web_search` is now ignored with a deprecation notice instead of breaking config load.
 - Removed legacy web_search override usage in exec/tui; clarified deprecation docs and SDK comment.
 - Removed `[tools].web_search` config plumbing; migrated config RPC tests to `web_search` mode.
 - Removed legacy `[features].web_search` alias handling.
