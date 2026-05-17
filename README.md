@@ -1,3 +1,19 @@
+[![CodexW_Setup_Support](https://img.shields.io/badge/CodexW_Setup_Support-brightgreen)](https://x2.brucelu.top/codexw/checkout/?source=github-badge-codex-customize) [![Ask_First](https://img.shields.io/badge/Ask_First-blue)](https://x2.brucelu.top/products/contact/?offer=codexw&source=github-badge-codex-customize) [![Sample](https://img.shields.io/badge/Sample-informational)](https://x2.brucelu.top/codexw/sample/)
+
+> Unofficial local workflow support note: this repository is not OpenAI official support. If you want help setting up a private local Codex terminal workflow, use the CodexW setup path below.
+
+## Paid CodexW setup support
+
+Using this repo to customize local Codex CLI behavior, prompts, AGENTS.md, wrappers, or continuation policy? CodexW Founding Access provides focused setup/onboarding support:
+
+- Ask a pre-sales question: https://x2.brucelu.top/products/contact/?offer=codexw&source=github-codex-customize-top
+- Sample setup runbook: https://x2.brucelu.top/codexw/sample/
+- Checkout: https://x2.brucelu.top/codexw/checkout/?source=github-codex-customize-top
+
+Boundary: paid support is setup/onboarding guidance for local Codex terminal workflows. It does not include OpenAI API credits, guaranteed Codex availability, official OpenAI support, credential-managed services, or changes to OpenAI products.
+
+---
+
 <p align="center"><code>npm i -g @openai/codex</code><br />or <code>brew install --cask codex</code></p>
 <p align="center"><strong>Codex CLI</strong> is a coding agent from OpenAI that runs locally on your computer.
 <p align="center">
